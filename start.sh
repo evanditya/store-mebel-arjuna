@@ -20,9 +20,26 @@ done
 echo "Installing Python dependencies..."
 pip install -q -r backend/requirements.txt 2>/dev/null || true
 
-if [ ! -f "backend/seller_config.json" ]; then
-  echo "Seeding database..."
+echo "Checking if database needs seeding..."
+PRODUCT_COUNT=$(python3 -c "
+import sys, os
+sys.path.insert(0, 'backend')
+try:
+    from app.database import SessionLocal
+    from app.models import Product
+    db = SessionLocal()
+    count = db.query(Product).count()
+    db.close()
+    print(count)
+except Exception as e:
+    print(0)
+" 2>/dev/null || echo "0")
+
+if [ "$PRODUCT_COUNT" = "0" ]; then
+  echo "Database is empty — seeding now..."
   cd backend && python3 seed.py && cd .. || cd ..
+else
+  echo "Database already has $PRODUCT_COUNT products — skipping seed."
 fi
 
 echo "Starting FastAPI backend on port 8000..."
