@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Product, ProductImage, ProductVariant, gen_id
 from app.routes.auth import get_current_user
@@ -76,21 +76,47 @@ def generate_slug(name: str) -> str:
     return f"{base}-{suffix}"
 
 
+def product_to_list_dict(product: Product) -> dict:
+    return {
+        "name": product.name,
+        "slug": product.slug,
+        "price": product.price,
+        "original_price": product.original_price,
+        "category": product.category,
+        "sold_count": product.sold_count,
+        "stock": product.stock,
+        "rating": product.rating,
+        "primary_image": product.primary_image,
+        "variants": [
+            {
+                "variant_type": v.variant_type,
+                "price": v.price,
+                "price_modifier": v.price_modifier,
+                "is_available": v.is_available,
+            }
+            for v in product.variants
+        ],
+    }
+
+
 @router.get("/products")
 async def list_products(category: str = None, search: str = None, db: Session = Depends(get_db)):
-    query = db.query(Product)
+    query = db.query(Product).options(joinedload(Product.variants))
     if category:
         query = query.filter(Product.category == category)
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
     products = query.all()
     seller = load_seller_config()
-    return {"products": [product_to_dict(p) for p in products], "seller": seller}
+    return {"products": [product_to_list_dict(p) for p in products], "seller": seller}
 
 
 @router.get("/products/{slug}")
 async def get_product(slug: str, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.slug == slug).first()
+    product = db.query(Product).options(
+        joinedload(Product.images),
+        joinedload(Product.variants)
+    ).filter(Product.slug == slug).first()
     if not product:
         return JSONResponse({"error": "Produk tidak ditemukan"}, status_code=404)
     return {"product": product_to_dict(product)}
