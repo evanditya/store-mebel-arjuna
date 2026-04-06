@@ -8,7 +8,7 @@ packages = ["cargo", "libiconv", "libxcrypt", "rustc"]
 
 [deployment]
 run = ["bash", "start.sh"]
-deploymentTarget = "cloudrun"
+deploymentTarget = "gce"
 
 [[ports]]
 localPort = 5000
