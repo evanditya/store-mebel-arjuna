@@ -23,9 +23,26 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 cd ..
 
-# Seed database in background — runs after backend is ready
+# Wait until the backend health endpoint responds before starting Next.js
+echo "Waiting for backend to be ready..."
+for i in $(seq 1 30); do
+  STATUS=$(python3 -c "
+import urllib.request, sys
+try:
+    urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)
+    print('ok')
+except:
+    print('not_ready')
+" 2>/dev/null)
+  if [ "$STATUS" = "ok" ]; then
+    echo "Backend is ready (${i}s)"
+    break
+  fi
+  sleep 1
+done
+
+# Seed database in background — runs after backend is confirmed ready
 (
-  sleep 6
   echo "Checking if database needs seeding..."
   PRODUCT_COUNT=$(python3 -c "
 import sys, os
@@ -49,8 +66,6 @@ except Exception as e:
     echo "Database already has $PRODUCT_COUNT products — skipping seed."
   fi
 ) &
-
-echo "Backend PID: $BACKEND_PID"
 
 echo ""
 echo "========================================="
