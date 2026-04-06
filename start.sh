@@ -20,8 +20,17 @@ done
 echo "Installing Python dependencies..."
 pip install -q -r backend/requirements.txt 2>/dev/null || true
 
-echo "Checking if database needs seeding..."
-PRODUCT_COUNT=$(python3 -c "
+echo "Starting FastAPI backend on port 8000..."
+cd backend
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+BACKEND_PID=$!
+cd ..
+
+# Seed in background after backend starts — avoids blocking startup
+(
+  sleep 5
+  echo "Checking if database needs seeding..."
+  PRODUCT_COUNT=$(python3 -c "
 import sys, os
 sys.path.insert(0, 'backend')
 try:
@@ -35,20 +44,15 @@ except Exception as e:
     print(0)
 " 2>/dev/null || echo "0")
 
-if [ "$PRODUCT_COUNT" = "0" ]; then
-  echo "Database is empty — seeding now..."
-  cd backend && python3 seed.py && cd .. || cd ..
-else
-  echo "Database already has $PRODUCT_COUNT products — skipping seed."
-fi
+  if [ "$PRODUCT_COUNT" = "0" ]; then
+    echo "Database is empty — seeding now (background)..."
+    cd backend && python3 seed.py && cd ..
+    echo "Seeding complete."
+  else
+    echo "Database already has $PRODUCT_COUNT products — skipping seed."
+  fi
+) &
 
-echo "Starting FastAPI backend on port 8000..."
-cd backend
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-BACKEND_PID=$!
-cd ..
-
-sleep 2
 echo "Backend PID: $BACKEND_PID"
 
 if [ ! -d "frontend/node_modules" ]; then
