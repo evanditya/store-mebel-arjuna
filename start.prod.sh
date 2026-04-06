@@ -1,8 +1,12 @@
 #!/bin/bash
 
+BACKEND_PID=""
+FRONTEND_PID=""
+
 cleanup() {
   echo "Stopping services..."
-  kill $BACKEND_PID 2>/dev/null
+  [ -n "$BACKEND_PID" ] && kill $BACKEND_PID 2>/dev/null
+  [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null
   exit 0
 }
 trap cleanup EXIT INT TERM
@@ -23,9 +27,14 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 cd ..
 
-# Seed database in background after backend is ready
+echo "Starting Next.js on port 5000..."
+cd frontend
+npm run start &
+FRONTEND_PID=$!
+cd ..
+
+# Seed database in background after backend is confirmed ready
 (
-  echo "Waiting for backend before seeding check..."
   for i in $(seq 1 30); do
     STATUS=$(python3 -c "
 import urllib.request
@@ -66,11 +75,25 @@ except Exception as e:
 
 echo ""
 echo "========================================="
-echo "  Store starting on port 5000 (production)!"
+echo "  Store running: backend:8000 frontend:5000"
 echo "========================================="
-echo ""
 
-# Start Next.js immediately so port 5000 opens fast for health checks
-# Backend will be ready within ~15s; the frontend handles the brief startup window gracefully
-cd frontend
-exec npm run start
+# Keep the parent shell alive to supervise both child processes
+# If either exits unexpectedly, restart it
+while true; do
+  if ! kill -0 $BACKEND_PID 2>/dev/null; then
+    echo "Backend died — restarting..."
+    cd backend
+    python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+    BACKEND_PID=$!
+    cd ..
+  fi
+  if ! kill -0 $FRONTEND_PID 2>/dev/null; then
+    echo "Frontend died — restarting..."
+    cd frontend
+    npm run start &
+    FRONTEND_PID=$!
+    cd ..
+  fi
+  sleep 5
+done
