@@ -23,27 +23,24 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 cd ..
 
-# Wait until the backend health endpoint responds before starting Next.js
-echo "Waiting for backend to be ready..."
-for i in $(seq 1 30); do
-  STATUS=$(python3 -c "
-import urllib.request, sys
+# Seed database in background after backend is ready
+(
+  echo "Waiting for backend before seeding check..."
+  for i in $(seq 1 30); do
+    STATUS=$(python3 -c "
+import urllib.request
 try:
     urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)
     print('ok')
 except:
     print('not_ready')
 " 2>/dev/null)
-  if [ "$STATUS" = "ok" ]; then
-    echo "Backend is ready (${i}s)"
-    break
-  fi
-  sleep 1
-done
+    if [ "$STATUS" = "ok" ]; then
+      break
+    fi
+    sleep 1
+  done
 
-# Seed database in background — runs after backend is confirmed ready
-(
-  echo "Checking if database needs seeding..."
   PRODUCT_COUNT=$(python3 -c "
 import sys, os
 sys.path.insert(0, 'backend')
@@ -73,5 +70,7 @@ echo "  Store starting on port 5000 (production)!"
 echo "========================================="
 echo ""
 
+# Start Next.js immediately so port 5000 opens fast for health checks
+# Backend will be ready within ~15s; the frontend handles the brief startup window gracefully
 cd frontend
 exec npm run start
