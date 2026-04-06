@@ -171,7 +171,26 @@ export default function StorePage() {
               product={product}
               formatPrice={formatPrice}
               formatSoldCount={formatSoldCount}
-              onClick={() => setSelectedProduct(product)}
+              onClick={() => {
+                fetch(`/api/products/${product.slug}`)
+                  .then((r) => r.json())
+                  .then((data) => {
+                    if (data.product) {
+                      const p = data.product;
+                      setSelectedProduct({
+                        ...p,
+                        images: Array.isArray(p.images)
+                          ? p.images.map((img: unknown) =>
+                              typeof img === "string"
+                                ? img
+                                : (img as Record<string, string>).image_url || ""
+                            )
+                          : [],
+                      });
+                    }
+                  })
+                  .catch(() => setSelectedProduct(product));
+              }}
             />
           ))}
         </div>
