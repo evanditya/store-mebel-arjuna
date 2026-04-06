@@ -90,8 +90,10 @@ def product_to_list_dict(product: Product) -> dict:
         "variants": [
             {
                 "variant_type": v.variant_type,
+                "variant_name": v.variant_name,
                 "price": v.price,
                 "price_modifier": v.price_modifier,
+                "stock": v.stock,
                 "is_available": v.is_available,
             }
             for v in product.variants
