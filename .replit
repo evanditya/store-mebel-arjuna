@@ -7,8 +7,9 @@ channel = "stable-24_05"
 packages = ["cargo", "libiconv", "libxcrypt", "rustc"]
 
 [deployment]
-run = ["bash", "start.sh"]
-deploymentTarget = "gce"
+run = ["bash", "start.prod.sh"]
+deploymentTarget = "vm"
+build = ["bash", "-c", "pip install -q -r backend/requirements.txt 2>/dev/null || true; cd frontend && npm install && npm run build"]
 
 [[ports]]
 localPort = 5000
