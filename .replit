@@ -1,8 +1,10 @@
 run = "bash start.sh"
 entrypoint = "start.sh"
+modules = ["python-3.11"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["cargo", "libiconv", "libxcrypt", "rustc"]
 
 [deployment]
 run = ["bash", "start.sh"]
@@ -15,3 +17,35 @@ externalPort = 80
 [[ports]]
 localPort = 8000
 externalPort = 8000
+
+[agent]
+expertMode = true
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "vOL9HgHevH_JbJdMQQdnvqT38YSqC5WFvHfaGTkdBxI"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash start.sh"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
