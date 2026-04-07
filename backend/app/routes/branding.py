@@ -10,9 +10,8 @@ router = APIRouter(prefix="/api/branding")
 SELLER_CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "seller_config.json"
 )
-PUBLIC_IMAGES_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "frontend", "public", "images"
+UPLOADS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"
 )
 
 
@@ -82,11 +81,11 @@ async def upload_image(
     if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
         ext = "jpg"
     filename = f"branding_{image_type}_{uuid.uuid4().hex[:8]}.{ext}"
-    dest = os.path.join(PUBLIC_IMAGES_DIR, filename)
-    os.makedirs(PUBLIC_IMAGES_DIR, exist_ok=True)
+    dest = os.path.join(UPLOADS_DIR, filename)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     try:
         with open(dest, "wb") as f:
             shutil.copyfileobj(file.file, f)
     except Exception as e:
         return JSONResponse({"error": f"Gagal menyimpan file: {str(e)}"}, status_code=500)
-    return {"url": f"/images/{filename}"}
+    return {"url": f"/uploads/{filename}"}
