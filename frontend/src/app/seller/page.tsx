@@ -268,7 +268,8 @@ export default function SellerDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Logo Toko</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Logo Toko</label>
+                  <p className="text-xs text-gray-500 mb-2">Ukuran rekomendasi: <span className="font-medium">500 × 500 px</span> — format kotak/bulat, maks. 2 MB</p>
                   <div className="flex items-start gap-4">
                     <div className="flex-1 space-y-2">
                       <input
@@ -293,7 +294,8 @@ export default function SellerDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Banner Toko</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banner Toko</label>
+                  <p className="text-xs text-gray-500 mb-2">Ukuran rekomendasi: <span className="font-medium">1200 × 300 px</span> — format horizontal/landscape, maks. 5 MB</p>
                   <div className="space-y-2">
                     <input
                       value={brandingForm.banner}
