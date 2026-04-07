@@ -75,6 +75,7 @@ export default function CheckoutPage() {
   const areaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const pendingAutoFetch = useRef<{ id: string; postal_code: number } | null>(null);
+  const loadedCartItemsRef = useRef<CartItem[]>([]);
 
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => {
@@ -87,11 +88,17 @@ export default function CheckoutPage() {
         const restoredArea: Area = { id: u.area_id, name: u.area_name, postal_code: Number(u.postal_code) || 0 };
         setSelectedArea(restoredArea);
         setAreaQuery(u.area_name);
-        pendingAutoFetch.current = { id: u.area_id, postal_code: Number(u.postal_code) || 0 };
+        const areaData = { id: u.area_id, postal_code: Number(u.postal_code) || 0 };
+        if (loadedCartItemsRef.current.length > 0) {
+          fetchRatesWithItems(areaData.id, areaData.postal_code, loadedCartItemsRef.current);
+        } else {
+          pendingAutoFetch.current = areaData;
+        }
       }
     });
     fetch("/api/cart").then((r) => r.json()).then((data) => {
       const cartItems = data.items || [];
+      loadedCartItemsRef.current = cartItems;
       setItems(cartItems);
       setLoading(false);
       if (pendingAutoFetch.current && cartItems.length > 0) {
@@ -356,9 +363,16 @@ export default function CheckoutPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-gray-400 text-sm border rounded-lg bg-gray-50">
-                    <p>Tidak ada kurir tersedia untuk tujuan ini.</p>
-                    <p className="text-xs mt-1">Coba pilih area tujuan yang berbeda.</p>
+                  <div className="text-center py-6 text-gray-500 text-sm border rounded-lg bg-gray-50">
+                    <p className="font-medium">Tidak ada kurir tersedia untuk tujuan ini.</p>
+                    <p className="text-xs mt-1 text-gray-400">Pastikan area tujuan sudah dipilih dengan benar.</p>
+                    <button
+                      onClick={() => selectedArea && fetchRates(selectedArea.id, selectedArea.postal_code)}
+                      className="mt-3 text-xs text-blue-600 underline hover:text-blue-800"
+                      data-testid="button-retry-rates-empty"
+                    >
+                      Coba lagi
+                    </button>
                   </div>
                 )}
               </div>

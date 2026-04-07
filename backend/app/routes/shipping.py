@@ -156,60 +156,63 @@ async def get_rates(request: Request, db: Session = Depends(get_db)):
         results.sort(key=lambda x: x["price"])
         return results
 
-    results = []
-    if resp.status_code == 200:
-        data = resp.json()
-        pricing = data.get("pricing", [])
-        results = _parse_pricing(pricing)
-        if results:
-            return {"rates": results}
-
     def _extract_postal_code(area_id_str):
         if "IDZ" in area_id_str:
             return area_id_str.split("IDZ")[-1]
         return ""
 
-    if resp.status_code != 200:
+    async def _try_postal_fallback():
         postal_fallback = _extract_postal_code(destination_area_id)
-        if postal_fallback and postal_fallback.isdigit():
-            try:
-                fallback_payload = {
-                    "couriers": couriers,
-                    "items": items,
-                    "origin_postal_code": int(origin_postal_code),
-                    "destination_postal_code": int(postal_fallback),
-                }
-                if origin_area_id:
-                    fallback_payload["origin_area_id"] = origin_area_id
-
-                print(f"[Biteship rates] Retrying with postal_code fallback: dest_postal={postal_fallback}")
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp2 = await client.post(
-                        f"{BITESHIP_BASE}/v1/rates/couriers",
-                        json=fallback_payload,
-                        headers=biteship_headers(),
-                    )
-                if resp2.status_code == 200:
-                    data2 = resp2.json()
-                    results2 = _parse_pricing(data2.get("pricing", []))
-                    if results2:
-                        return {"rates": results2}
-            except Exception as e:
-                print(f"[Biteship rates] Postal fallback error: {e}")
-
-    if resp.status_code != 200:
+        if not postal_fallback or not postal_fallback.isdigit():
+            return []
         try:
-            err = resp.json()
-            error_msg = err.get("error", "Gagal mendapatkan ongkir")
-            if isinstance(error_msg, dict):
-                error_msg = error_msg.get("message", str(error_msg))
-            print(f"[Biteship rates error] status={resp.status_code} response={err}")
-            return JSONResponse({"error": error_msg, "debug": {"status": resp.status_code, "origin_area_id": origin_area_id}}, status_code=resp.status_code)
-        except Exception:
-            print(f"[Biteship rates error] status={resp.status_code} body={resp.text[:500]}")
-            return JSONResponse({"error": "Gagal mendapatkan ongkir"}, status_code=500)
+            fallback_payload = {
+                "couriers": couriers,
+                "items": items,
+                "origin_postal_code": int(origin_postal_code),
+                "destination_postal_code": int(postal_fallback),
+            }
+            if origin_area_id:
+                fallback_payload["origin_area_id"] = origin_area_id
+            print(f"[Biteship rates] Retrying with postal_code fallback: dest_postal={postal_fallback}")
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp2 = await client.post(
+                    f"{BITESHIP_BASE}/v1/rates/couriers",
+                    json=fallback_payload,
+                    headers=biteship_headers(),
+                )
+            if resp2.status_code == 200:
+                return _parse_pricing(resp2.json().get("pricing", []))
+        except Exception as e:
+            print(f"[Biteship rates] Postal fallback error: {e}")
+        return []
 
-    return {"rates": []}
+    results = []
+    if resp.status_code == 200:
+        data = resp.json()
+        pricing = data.get("pricing", [])
+        results = _parse_pricing(pricing)
+        if not results:
+            print("[Biteship rates] 200 but empty pricing — trying postal fallback")
+            results = await _try_postal_fallback()
+        if results:
+            return {"rates": results}
+        return {"rates": []}
+
+    results = await _try_postal_fallback()
+    if results:
+        return {"rates": results}
+
+    try:
+        err = resp.json()
+        error_msg = err.get("error", "Gagal mendapatkan ongkir")
+        if isinstance(error_msg, dict):
+            error_msg = error_msg.get("message", str(error_msg))
+        print(f"[Biteship rates error] status={resp.status_code} response={err}")
+        return JSONResponse({"error": error_msg, "debug": {"status": resp.status_code, "origin_area_id": origin_area_id}}, status_code=resp.status_code)
+    except Exception:
+        print(f"[Biteship rates error] status={resp.status_code} body={resp.text[:500]}")
+        return JSONResponse({"error": "Gagal mendapatkan ongkir"}, status_code=500)
 
 
 @router.get("/origin")
