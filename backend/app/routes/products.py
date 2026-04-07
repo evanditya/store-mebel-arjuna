@@ -18,8 +18,16 @@ SELLER_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirnam
 def load_seller_config():
     if os.path.exists(SELLER_CONFIG_PATH):
         with open(SELLER_CONFIG_PATH, "r") as f:
-            return json.load(f)
-    return {"username": "seller", "seller_name": "Store", "profile_picture": "", "brand_colors": {}}
+            data = json.load(f)
+            return {
+                "username": data.get("username", ""),
+                "seller_name": data.get("seller_name", ""),
+                "profile_picture": data.get("profile_picture", ""),
+                "brand_colors": data.get("brand_colors", []),
+                "banner": data.get("banner", ""),
+                "font": data.get("font", ""),
+            }
+    return {"username": "seller", "seller_name": "Store", "profile_picture": "", "brand_colors": [], "banner": "", "font": ""}
 
 
 def product_to_dict(product: Product) -> dict:

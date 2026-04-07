@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface User { id: string; email: string; name: string; role: "seller" | "buyer"; }
-interface NavbarProps { sellerName: string; profilePicture: string | null; cartCount: number; }
+interface NavbarProps { sellerName: string; profilePicture: string | null; cartCount: number; brandColors?: string[]; }
 
-export default function Navbar({ sellerName, profilePicture, cartCount }: NavbarProps) {
+export default function Navbar({ sellerName, profilePicture, cartCount, brandColors = [] }: NavbarProps) {
+  const navBg = brandColors[0] || "";
+  const navText = brandColors[1] || "";
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -15,11 +17,11 @@ export default function Navbar({ sellerName, profilePicture, cartCount }: Navbar
   const handleLogout = async () => { await fetch("/api/auth/logout", { method: "POST" }); setUser(null); setMenuOpen(false); window.location.href = "/"; };
 
   return (
-    <header className="bg-white border-b sticky top-0 z-50">
+    <header className="border-b sticky top-0 z-50" style={navBg ? { backgroundColor: navBg } : { backgroundColor: "#fff" }}>
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-3 min-w-0">
           {profilePicture && <img src={profilePicture} alt={sellerName} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />}
-          <h1 className="text-lg font-bold truncate">{sellerName}</h1>
+          <h1 className="text-lg font-bold truncate" style={navText ? { color: navText } : undefined}>{sellerName}</h1>
         </Link>
         <div className="flex items-center gap-3">
           {user && (

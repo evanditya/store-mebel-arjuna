@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import engine, Base
-from app.routes import auth, products, cart, orders, payment, upload, shipping
+from app.routes import auth, products, cart, orders, payment, upload, shipping, branding
 import os
 
 
@@ -45,6 +45,7 @@ app.include_router(orders.router)
 app.include_router(payment.router)
 app.include_router(upload.router)
 app.include_router(shipping.router)
+app.include_router(branding.router)
 
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)

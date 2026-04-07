@@ -34,6 +34,8 @@ interface Seller {
   seller_name: string;
   profile_picture: string | null;
   brand_colors: string[];
+  banner?: string | null;
+  font?: string;
 }
 
 function formatPrice(price: number): string {
@@ -90,6 +92,26 @@ export default function StorePage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!seller.font) {
+      document.body.style.fontFamily = "";
+      return;
+    }
+    const existing = document.getElementById("custom-font-link");
+    if (existing) existing.remove();
+    const link = document.createElement("link");
+    link.id = "custom-font-link";
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(seller.font)}:wght@400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+    document.body.style.fontFamily = `'${seller.font}', sans-serif`;
+    return () => {
+      const el = document.getElementById("custom-font-link");
+      if (el) el.remove();
+      document.body.style.fontFamily = "";
+    };
+  }, [seller.font]);
+
   const categories = useMemo(() => {
     const cats = [...new Set(products.map((p) => p.category))];
     return cats.sort();
@@ -135,7 +157,17 @@ export default function StorePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar sellerName={seller.seller_name} profilePicture={seller.profile_picture} cartCount={cartCount} />
+      <Navbar
+        sellerName={seller.seller_name}
+        profilePicture={seller.profile_picture}
+        cartCount={cartCount}
+        brandColors={seller.brand_colors}
+      />
+      {seller.banner && (
+        <div className="w-full">
+          <img src={seller.banner} alt="Banner toko" className="w-full object-cover max-h-64" />
+        </div>
+      )}
 
       <div className="sticky top-[57px] z-40 bg-white border-b overflow-x-auto">
         <div className="flex gap-2 px-4 py-2">

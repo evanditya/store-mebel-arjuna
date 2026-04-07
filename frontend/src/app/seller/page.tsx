@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -48,11 +48,81 @@ export default function SellerDashboard() {
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
 
+  const FONT_OPTIONS = ["", "Poppins", "Inter", "Roboto", "Lato", "Montserrat", "Open Sans", "Nunito", "Playfair Display"];
+  const [brandingForm, setBrandingForm] = useState({
+    seller_name: "",
+    logo: "",
+    banner: "",
+    colors: ["", "", ""],
+    font: "",
+  });
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [brandingMsg, setBrandingMsg] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
     Promise.all([fetch("/api/products").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => setShippingAvailable(data.available)).catch(() => {});
+    fetch("/api/branding").then((r) => r.json()).then((data) => {
+      setBrandingForm({
+        seller_name: data.seller_name || "",
+        logo: data.logo || "",
+        banner: data.banner || "",
+        colors: [data.brand_colors?.[0] || "", data.brand_colors?.[1] || "", data.brand_colors?.[2] || ""],
+        font: data.font || "",
+      });
+    }).catch(() => {});
   }, [router]);
+
+  const saveBranding = async () => {
+    setBrandingSaving(true);
+    setBrandingMsg("");
+    try {
+      const res = await fetch("/api/branding", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seller_name: brandingForm.seller_name,
+          logo: brandingForm.logo,
+          banner: brandingForm.banner,
+          brand_colors: brandingForm.colors,
+          font: brandingForm.font,
+        }),
+      });
+      if (res.ok) {
+        setBrandingMsg("Tampilan toko berhasil disimpan!");
+      } else {
+        setBrandingMsg("Gagal menyimpan.");
+      }
+    } catch {
+      setBrandingMsg("Terjadi kesalahan.");
+    }
+    setBrandingSaving(false);
+    setTimeout(() => setBrandingMsg(""), 3000);
+  };
+
+  const uploadImage = async (file: File, type: "logo" | "banner") => {
+    if (type === "logo") setUploadingLogo(true);
+    else setUploadingBanner(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("image_type", type);
+      const res = await fetch("/api/branding/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.url) {
+        setBrandingForm((prev) => ({ ...prev, [type === "logo" ? "logo" : "banner"]: data.url }));
+      }
+    } catch {
+      alert("Gagal mengupload gambar.");
+    }
+    if (type === "logo") setUploadingLogo(false);
+    else setUploadingBanner(false);
+  };
 
   const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) setProducts((prev) => prev.filter((p) => p.slug !== slug)); };
   const handleStatusChange = async (orderId: string, newStatus: string) => { await fetch(`/api/orders`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: orderId, status: newStatus }) }); setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))); };
@@ -181,6 +251,140 @@ export default function SellerDashboard() {
         )}
         {tab === "settings" && (
           <div className="space-y-4">
+
+            <div className="bg-white rounded-lg border p-6">
+              <h2 className="font-bold text-lg mb-1">Tampilan Toko</h2>
+              <p className="text-sm text-gray-500 mb-5">Atur nama, logo, banner, warna, dan font toko yang tampil ke pembeli.</p>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Toko</label>
+                  <input
+                    value={brandingForm.seller_name}
+                    onChange={(e) => setBrandingForm((p) => ({ ...p, seller_name: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Nama toko Anda"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Logo Toko</label>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 space-y-2">
+                      <input
+                        value={brandingForm.logo}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, logo: e.target.value }))}
+                        className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                        placeholder="https://... atau upload gambar"
+                      />
+                      <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "logo"); }} />
+                      <button
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={uploadingLogo}
+                        className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50"
+                      >
+                        {uploadingLogo ? "Mengupload..." : "Upload Gambar"}
+                      </button>
+                    </div>
+                    {brandingForm.logo && (
+                      <img src={brandingForm.logo} alt="Logo" className="w-16 h-16 rounded-full object-cover border flex-shrink-0" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Banner Toko</label>
+                  <div className="space-y-2">
+                    <input
+                      value={brandingForm.banner}
+                      onChange={(e) => setBrandingForm((p) => ({ ...p, banner: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                      placeholder="https://... atau upload gambar banner"
+                    />
+                    <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); }} />
+                    <button
+                      onClick={() => bannerInputRef.current?.click()}
+                      disabled={uploadingBanner}
+                      className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50"
+                    >
+                      {uploadingBanner ? "Mengupload..." : "Upload Gambar"}
+                    </button>
+                    {brandingForm.banner && (
+                      <img src={brandingForm.banner} alt="Banner" className="w-full rounded-lg object-cover max-h-40 mt-2 border" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Warna Toko</label>
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: "Navbar (latar)", key: 0 },
+                      { label: "Navbar (teks)", key: 1 },
+                      { label: "Aksen / Tombol", key: 2 },
+                    ].map(({ label, key }) => (
+                      <div key={key} className="flex flex-col items-center gap-2">
+                        <div className="relative">
+                          <div
+                            className="w-12 h-12 rounded-lg border-2 border-gray-200 cursor-pointer shadow-sm overflow-hidden"
+                            style={{ backgroundColor: brandingForm.colors[key] || "#e5e7eb" }}
+                          >
+                            <input
+                              type="color"
+                              value={brandingForm.colors[key] || "#e5e7eb"}
+                              onChange={(e) => {
+                                const next = [...brandingForm.colors];
+                                next[key] = e.target.value;
+                                setBrandingForm((p) => ({ ...p, colors: next }));
+                              }}
+                              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-500 text-center">{label}</span>
+                        <span className="text-xs font-mono text-gray-400">{brandingForm.colors[key] || "-"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Klik kotak warna untuk memilih. Kosongkan untuk kembali ke warna default.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Font Toko</label>
+                  <select
+                    value={brandingForm.font}
+                    onChange={(e) => setBrandingForm((p) => ({ ...p, font: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 bg-white"
+                  >
+                    {FONT_OPTIONS.map((f) => (
+                      <option key={f} value={f} style={f ? { fontFamily: f } : undefined}>
+                        {f || "Default (sistem)"}
+                      </option>
+                    ))}
+                  </select>
+                  {brandingForm.font && (
+                    <p className="text-xs text-gray-400 mt-1">Preview: <span style={{ fontFamily: brandingForm.font }} className="text-gray-700">Toko Furniture Pilihan Anda</span></p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={saveBranding}
+                    disabled={brandingSaving}
+                    className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                    data-testid="button-save-branding"
+                  >
+                    {brandingSaving ? "Menyimpan..." : "Simpan Tampilan"}
+                  </button>
+                  {brandingMsg && (
+                    <span className={`text-sm ${brandingMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>
+                      {brandingMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-lg border p-6">
               <h2 className="font-bold text-lg mb-1">Profil, Alamat & Lokasi Pengiriman</h2>
               <p className="text-sm text-gray-500 mb-3">Kelola nama pengirim, telepon, alamat toko, dan lokasi origin pengiriman Biteship dari satu halaman.</p>
