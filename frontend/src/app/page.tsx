@@ -261,8 +261,8 @@ export default function StorePage() {
       <BannerSlider banners={banners} />
 
       <div className="sticky top-[57px] z-40 bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative flex-1 max-w-md">
+        <div className="max-w-7xl mx-auto px-4 pt-2 pb-1">
+          <div className="relative w-full">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -274,12 +274,14 @@ export default function StorePage() {
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setActiveCategory(null); }}
               placeholder="Cari produk..."
-              className="w-full pl-9 pr-4 py-1.5 border rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-900 bg-gray-50"
+              className="w-full pl-9 pr-4 py-2 border rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-900 bg-gray-50"
               data-testid="input-search"
             />
           </div>
+        </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-0.5 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 pb-2">
+          <div className="flex gap-2 overflow-x-auto">
             <button
               onClick={() => handleCategoryClick(null)}
               className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition ${
