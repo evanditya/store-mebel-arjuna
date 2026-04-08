@@ -168,13 +168,16 @@ export default function SellerDashboard() {
     banner: "",
     colors: ["", "", ""],
     font: "",
+    favicon: "",
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
 
   const loadBanners = async () => {
     const res = await fetch("/api/banners/all");
@@ -254,6 +257,7 @@ export default function SellerDashboard() {
         banner: data.banner || "",
         colors: [data.brand_colors?.[0] || "", data.brand_colors?.[1] || "", data.brand_colors?.[2] || ""],
         font: data.font || "",
+        favicon: data.favicon || "",
       });
     }).catch(() => {});
     loadBanners();
@@ -273,6 +277,7 @@ export default function SellerDashboard() {
           banner: brandingForm.banner,
           brand_colors: brandingForm.colors,
           font: brandingForm.font,
+          favicon: brandingForm.favicon,
         }),
       });
       if (res.ok) {
@@ -287,9 +292,10 @@ export default function SellerDashboard() {
     setTimeout(() => setBrandingMsg(""), 3000);
   };
 
-  const uploadImage = async (file: File, type: "logo" | "banner") => {
+  const uploadImage = async (file: File, type: "logo" | "banner" | "favicon") => {
     if (type === "logo") setUploadingLogo(true);
-    else setUploadingBanner(true);
+    else if (type === "banner") setUploadingBanner(true);
+    else setUploadingFavicon(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -297,13 +303,14 @@ export default function SellerDashboard() {
       const res = await fetch("/api/branding/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (data.url) {
-        setBrandingForm((prev) => ({ ...prev, [type === "logo" ? "logo" : "banner"]: data.url }));
+        setBrandingForm((prev) => ({ ...prev, [type]: data.url }));
       }
     } catch {
       alert("Gagal mengupload gambar.");
     }
     if (type === "logo") setUploadingLogo(false);
-    else setUploadingBanner(false);
+    else if (type === "banner") setUploadingBanner(false);
+    else setUploadingFavicon(false);
   };
 
   const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) setProducts((prev) => prev.filter((p) => p.slug !== slug)); };
@@ -535,6 +542,46 @@ export default function SellerDashboard() {
                     </div>
                     {brandingForm.logo && (
                       <img src={brandingForm.logo} alt="Logo" className="w-16 h-16 rounded-full object-cover border flex-shrink-0" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Favicon Website</label>
+                  <p className="text-xs text-gray-400 mb-2">Ikon kecil yang muncul di tab browser. Gunakan gambar persegi (disarankan 32×32 atau 512×512 px).</p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 space-y-2">
+                      <input
+                        value={brandingForm.favicon}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, favicon: e.target.value }))}
+                        className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                        placeholder="https://... atau upload gambar"
+                      />
+                      <input
+                        ref={faviconInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "favicon"); }}
+                      />
+                      <button
+                        onClick={() => faviconInputRef.current?.click()}
+                        disabled={uploadingFavicon}
+                        className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50"
+                      >
+                        {uploadingFavicon ? "Mengupload..." : "Upload Favicon"}
+                      </button>
+                    </div>
+                    {brandingForm.favicon && (
+                      <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                        <img
+                          src={brandingForm.favicon}
+                          alt="Favicon"
+                          className="w-10 h-10 object-contain border rounded"
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
+                        <span className="text-xs text-gray-400">Preview</span>
+                      </div>
                     )}
                   </div>
                 </div>

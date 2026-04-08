@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.routes.auth import get_current_user
-import json, os, shutil, uuid
+import json, os, shutil, uuid, time
 
 router = APIRouter(prefix="/api/branding")
 
@@ -43,6 +43,8 @@ async def get_branding():
         "banner": config.get("banner", "") or "",
         "brand_colors": config.get("brand_colors", []),
         "font": config.get("font", "") or "",
+        "favicon": config.get("favicon", "") or "",
+        "favicon_version": config.get("favicon_version", "") or "",
     }
 
 
@@ -66,6 +68,9 @@ async def update_branding(request: Request, db: Session = Depends(get_db)):
         config["brand_colors"] = body["brand_colors"]
     if "font" in body:
         config["font"] = body["font"]
+    if "favicon" in body:
+        config["favicon"] = body["favicon"]
+        config["favicon_version"] = str(int(time.time()))
     _save_config(config)
     return {"success": True}
 

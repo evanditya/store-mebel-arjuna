@@ -9,9 +9,14 @@ export async function generateMetadata(): Promise<Metadata> {
     if (res.ok) {
       const data = await res.json();
       const name = data.site_name || data.seller_name || "Toko Online";
+      const favicon: string = data.favicon || "";
+      const version: string = data.favicon_version || String(Date.now());
       return {
         title: name,
         description: `${name} - Toko Online`,
+        icons: favicon
+          ? { icon: `${favicon}?v=${version}`, shortcut: `${favicon}?v=${version}` }
+          : undefined,
       };
     }
   } catch {
