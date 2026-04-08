@@ -34,8 +34,11 @@ def _save_config(data: dict):
 @router.get("")
 async def get_branding():
     config = _load_config()
+    seller_name = config.get("seller_name", "")
+    site_name = config.get("site_name") or seller_name or "Toko Online"
     return {
-        "seller_name": config.get("seller_name", ""),
+        "site_name": site_name,
+        "seller_name": seller_name,
         "logo": config.get("profile_picture", "") or "",
         "banner": config.get("banner", "") or "",
         "brand_colors": config.get("brand_colors", []),
@@ -50,6 +53,8 @@ async def update_branding(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     config = _load_config()
+    if "site_name" in body:
+        config["site_name"] = body["site_name"]
     if "seller_name" in body:
         config["seller_name"] = body["seller_name"]
         config["username"] = body["seller_name"]

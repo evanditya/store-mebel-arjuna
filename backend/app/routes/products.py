@@ -19,15 +19,18 @@ def load_seller_config():
     if os.path.exists(SELLER_CONFIG_PATH):
         with open(SELLER_CONFIG_PATH, "r") as f:
             data = json.load(f)
+            seller_name = data.get("seller_name", "")
+            site_name = data.get("site_name") or seller_name or "Toko Online"
             return {
                 "username": data.get("username", ""),
-                "seller_name": data.get("seller_name", ""),
+                "seller_name": seller_name,
+                "site_name": site_name,
                 "profile_picture": data.get("profile_picture", ""),
                 "brand_colors": data.get("brand_colors", []),
                 "banner": data.get("banner", ""),
                 "font": data.get("font", ""),
             }
-    return {"username": "seller", "seller_name": "Store", "profile_picture": "", "brand_colors": [], "banner": "", "font": ""}
+    return {"username": "seller", "seller_name": "Store", "site_name": "Toko Online", "profile_picture": "", "brand_colors": [], "banner": "", "font": ""}
 
 
 def product_to_dict(product: Product) -> dict:

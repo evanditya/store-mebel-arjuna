@@ -162,6 +162,7 @@ export default function SellerDashboard() {
 
   const FONT_OPTIONS = ["", "Poppins", "Inter", "Roboto", "Lato", "Montserrat", "Open Sans", "Nunito", "Playfair Display"];
   const [brandingForm, setBrandingForm] = useState({
+    site_name: "",
     seller_name: "",
     logo: "",
     banner: "",
@@ -247,6 +248,7 @@ export default function SellerDashboard() {
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => setShippingAvailable(data.available)).catch(() => {});
     fetch("/api/branding").then((r) => r.json()).then((data) => {
       setBrandingForm({
+        site_name: data.site_name || "",
         seller_name: data.seller_name || "",
         logo: data.logo || "",
         banner: data.banner || "",
@@ -265,6 +267,7 @@ export default function SellerDashboard() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          site_name: brandingForm.site_name,
           seller_name: brandingForm.seller_name,
           logo: brandingForm.logo,
           banner: brandingForm.banner,
@@ -489,7 +492,19 @@ export default function SellerDashboard() {
 
               <div className="space-y-5">
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Website</label>
+                  <p className="text-xs text-gray-500 mb-2">Muncul di tab browser, meta title, dan hasil pencarian. Contoh: <span className="font-medium">Mebel Arjuna</span></p>
+                  <input
+                    value={brandingForm.site_name}
+                    onChange={(e) => setBrandingForm((p) => ({ ...p, site_name: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Nama website (tampil di tab browser)"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Toko</label>
+                  <p className="text-xs text-gray-500 mb-2">Muncul di navbar toko pembeli.</p>
                   <input
                     value={brandingForm.seller_name}
                     onChange={(e) => setBrandingForm((p) => ({ ...p, seller_name: e.target.value }))}

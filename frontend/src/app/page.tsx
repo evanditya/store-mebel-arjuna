@@ -34,6 +34,7 @@ interface Product {
 interface Seller {
   username: string;
   seller_name: string;
+  site_name?: string;
   profile_picture: string | null;
   brand_colors: string[];
   font?: string;
@@ -107,6 +108,11 @@ export default function StorePage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const name = seller.site_name || seller.seller_name;
+    if (name) document.title = name;
+  }, [seller.site_name, seller.seller_name]);
 
   useEffect(() => {
     if (!seller.font) {
