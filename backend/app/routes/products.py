@@ -113,15 +113,38 @@ def product_to_list_dict(product: Product) -> dict:
 
 
 @router.get("/products")
-async def list_products(category: str = None, search: str = None, db: Session = Depends(get_db)):
+async def list_products(
+    category: str = None,
+    search: str = None,
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+):
     query = db.query(Product).options(joinedload(Product.variants))
     if category:
         query = query.filter(Product.category == category)
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
-    products = query.all()
+    total = query.count()
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    products = query.offset((page - 1) * limit).limit(limit).all()
     seller = load_seller_config()
-    return {"products": [product_to_list_dict(p) for p in products], "seller": seller}
+    return {
+        "products": [product_to_list_dict(p) for p in products],
+        "seller": seller,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": max(1, (total + limit - 1) // limit),
+    }
+
+
+@router.get("/categories")
+async def list_categories(db: Session = Depends(get_db)):
+    from sqlalchemy import distinct as sql_distinct
+    cats = db.query(sql_distinct(Product.category)).filter(Product.category.isnot(None)).all()
+    return {"categories": sorted([c[0] for c in cats if c[0]])}
 
 
 @router.get("/products/{slug}")

@@ -21,7 +21,7 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
   return (
     <div className="bg-white rounded-lg border overflow-hidden cursor-pointer hover:shadow-md transition" onClick={onClick} data-testid={`product-card-${product.slug}`}>
       <div className="aspect-square relative">
-        <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" />
+        <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
         {product.original_price && product.original_price > min && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{Math.round((1 - min / product.original_price) * 100)}%</span>
         )}
