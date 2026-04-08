@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import dynamic from "next/dynamic";
 import ProductCard from "@/components/ProductCard";
 import ProductDetail from "@/components/ProductDetail";
 import Navbar from "@/components/Navbar";
+const BannerSlider = dynamic(() => import("@/components/BannerSlider"), { ssr: false });
 
 interface Variant {
   variant_type: string;
@@ -34,8 +36,16 @@ interface Seller {
   seller_name: string;
   profile_picture: string | null;
   brand_colors: string[];
-  banner?: string | null;
   font?: string;
+}
+
+interface Banner {
+  id: number;
+  image_url: string;
+  title?: string;
+  link?: string;
+  order: number;
+  is_active: boolean;
 }
 
 function formatPrice(price: number): string {
@@ -60,6 +70,7 @@ export default function StorePage() {
   const [toast, setToast] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [seller, setSeller] = useState<Seller>({ username: "", seller_name: "Store", profile_picture: null, brand_colors: [] });
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,6 +86,11 @@ export default function StorePage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    fetch("/api/banners")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setBanners(data); })
+      .catch(() => {});
 
     fetch("/api/auth/me")
       .then((r) => r.json())
@@ -163,11 +179,7 @@ export default function StorePage() {
         cartCount={cartCount}
         brandColors={seller.brand_colors}
       />
-      {seller.banner && (
-        <div className="w-full">
-          <img src={seller.banner} alt="Banner toko" className="w-full object-cover max-h-64" />
-        </div>
-      )}
+      <BannerSlider banners={banners} />
 
       <div className="sticky top-[57px] z-40 bg-white border-b overflow-x-auto">
         <div className="flex gap-2 px-4 py-2">

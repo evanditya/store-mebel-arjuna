@@ -3,8 +3,33 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+const BannerCropper = dynamic(() => import("@/components/BannerCropper"), { ssr: false });
 
 interface Product { name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; }
+interface Banner {
+  id: number;
+  image_url: string;
+  title?: string;
+  link?: string;
+  order: number;
+  is_active: boolean;
+}
 interface Order {
   id: string; total: number; status: string; created_at: string;
   courier_company?: string; courier_type?: string; courier_service_name?: string; shipping_cost?: number;
@@ -37,16 +62,103 @@ function ShippingBadge({ status }: { status?: string }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${info.color}`}>{info.label}</span>;
 }
 
+function SortableBannerItem({
+  banner,
+  onToggle,
+  onDelete,
+  titleVal,
+  linkVal,
+  onTitleChange,
+  onLinkChange,
+  onSave,
+}: {
+  banner: Banner;
+  onToggle: (id: number, val: boolean) => void;
+  onDelete: (id: number) => void;
+  titleVal: string;
+  linkVal: string;
+  onTitleChange: (val: string) => void;
+  onLinkChange: (val: string) => void;
+  onSave: (id: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: banner.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <div ref={setNodeRef} style={style} className="bg-white border rounded-xl overflow-hidden">
+      <div className="flex gap-3 items-start p-3">
+        <div
+          {...attributes}
+          {...listeners}
+          className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex-shrink-0 select-none touch-none"
+          title="Drag untuk ubah urutan"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+          </svg>
+        </div>
+        <img
+          src={banner.image_url}
+          alt={banner.title || "Banner"}
+          className="w-28 h-10 object-cover rounded-lg border flex-shrink-0"
+          style={{ aspectRatio: "3/1" }}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        />
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <input
+            value={titleVal}
+            onChange={(e) => onTitleChange(e.target.value)}
+            onBlur={() => onSave(banner.id)}
+            placeholder="Judul banner (opsional)"
+            className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          <input
+            value={linkVal}
+            onChange={(e) => onLinkChange(e.target.value)}
+            onBlur={() => onSave(banner.id)}
+            placeholder="Link URL (opsional)"
+            className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
+        <div className="flex flex-col items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => onToggle(banner.id, !banner.is_active)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${banner.is_active ? "bg-gray-900" : "bg-gray-200"}`}
+            title={banner.is_active ? "Nonaktifkan" : "Aktifkan"}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${banner.is_active ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+          <span className="text-xs text-gray-400">{banner.is_active ? "Aktif" : "Nonaktif"}</span>
+        </div>
+        <button
+          onClick={() => onDelete(banner.id)}
+          className="text-gray-400 hover:text-red-500 transition flex-shrink-0 mt-0.5"
+          title="Hapus banner"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SellerDashboard() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<"products" | "orders" | "settings">("products");
+  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings">("products");
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
+
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [showCropper, setShowCropper] = useState(false);
+  const [bannerForms, setBannerForms] = useState<Record<number, { title: string; link: string }>>({});
+  const [savingOrder, setSavingOrder] = useState(false);
+  const bannerSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const FONT_OPTIONS = ["", "Poppins", "Inter", "Roboto", "Lato", "Montserrat", "Open Sans", "Nunito", "Playfair Display"];
   const [brandingForm, setBrandingForm] = useState({
@@ -63,6 +175,72 @@ export default function SellerDashboard() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  const loadBanners = async () => {
+    const res = await fetch("/api/banners/all");
+    if (!res.ok) return;
+    const data: Banner[] = await res.json();
+    setBanners(data);
+    const forms: Record<number, { title: string; link: string }> = {};
+    data.forEach((b) => { forms[b.id] = { title: b.title || "", link: b.link || "" }; });
+    setBannerForms(forms);
+  };
+
+  const handleBannerDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = banners.findIndex((b) => b.id === active.id);
+    const newIndex = banners.findIndex((b) => b.id === over.id);
+    const reordered = arrayMove(banners, oldIndex, newIndex);
+    setBanners(reordered);
+    setSavingOrder(true);
+    await fetch("/api/banners/reorder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: reordered.map((b) => b.id) }),
+    });
+    setSavingOrder(false);
+  };
+
+  const handleBannerToggle = async (id: number, val: boolean) => {
+    setBanners((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: val } : b)));
+    await fetch(`/api/banners/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: val }),
+    });
+  };
+
+  const handleBannerDelete = async (id: number) => {
+    if (!confirm("Hapus banner ini?")) return;
+    setBanners((prev) => prev.filter((b) => b.id !== id));
+    await fetch(`/api/banners/${id}`, { method: "DELETE" });
+  };
+
+  const handleBannerSave = async (id: number) => {
+    const form = bannerForms[id];
+    if (!form) return;
+    await fetch(`/api/banners/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: form.title, link: form.link }),
+    });
+    setBanners((prev) => prev.map((b) => (b.id === id ? { ...b, title: form.title, link: form.link } : b)));
+  };
+
+  const handleCropperComplete = async (url: string) => {
+    setShowCropper(false);
+    const res = await fetch("/api/banners", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_url: url }),
+    });
+    if (res.ok) {
+      const newBanner: Banner = await res.json();
+      setBanners((prev) => [...prev, newBanner]);
+      setBannerForms((prev) => ({ ...prev, [newBanner.id]: { title: "", link: "" } }));
+    }
+  };
+
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
     Promise.all([fetch("/api/products").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
@@ -76,6 +254,7 @@ export default function SellerDashboard() {
         font: data.font || "",
       });
     }).catch(() => {});
+    loadBanners();
   }, [router]);
 
   const saveBranding = async () => {
@@ -171,6 +350,7 @@ export default function SellerDashboard() {
         <div className="flex gap-2 mb-4">
           <button onClick={() => setTab("products")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "products" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-products">Produk ({products.length})</button>
           <button onClick={() => setTab("orders")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "orders" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-orders">Pesanan ({orders.length})</button>
+          <button onClick={() => setTab("banners")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "banners" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-banners">Banner ({banners.length})</button>
           <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
         </div>
         {tab === "products" && (
@@ -249,12 +429,63 @@ export default function SellerDashboard() {
             {orders.length === 0 && <div className="text-center py-12 text-gray-400">Belum ada pesanan</div>}
           </div>
         )}
+        {tab === "banners" && (
+          <div className="space-y-4">
+            {showCropper && (
+              <BannerCropper onComplete={handleCropperComplete} onClose={() => setShowCropper(false)} />
+            )}
+            <div className="bg-white rounded-lg border p-6">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h2 className="font-bold text-lg">Manajemen Banner</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Upload, atur urutan, dan aktifkan/nonaktifkan banner toko. Rasio 3:1 (1200 × 400 px).</p>
+                </div>
+                <button
+                  onClick={() => setShowCropper(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Tambah Banner
+                </button>
+              </div>
+              {savingOrder && <p className="text-xs text-gray-400 mb-2">Menyimpan urutan...</p>}
+              {banners.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <div className="text-5xl mb-3">🖼️</div>
+                  <p className="font-medium text-gray-500">Belum ada banner</p>
+                  <p className="text-sm mt-1">Klik "Tambah Banner" untuk upload gambar pertama</p>
+                </div>
+              ) : (
+                <DndContext sensors={bannerSensors} collisionDetection={closestCenter} onDragEnd={handleBannerDragEnd}>
+                  <SortableContext items={banners.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3 mt-4">
+                      {banners.map((b) => (
+                        <SortableBannerItem
+                          key={b.id}
+                          banner={b}
+                          onToggle={handleBannerToggle}
+                          onDelete={handleBannerDelete}
+                          titleVal={bannerForms[b.id]?.title ?? ""}
+                          linkVal={bannerForms[b.id]?.link ?? ""}
+                          onTitleChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], title: val } }))}
+                          onLinkChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], link: val } }))}
+                          onSave={handleBannerSave}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+              <p className="text-xs text-gray-400 mt-4">Drag ≡ untuk mengubah urutan. Klik toggle untuk aktifkan/nonaktifkan. Judul & link tersimpan otomatis saat klik di luar kolom.</p>
+            </div>
+          </div>
+        )}
         {tab === "settings" && (
           <div className="space-y-4">
 
             <div className="bg-white rounded-lg border p-6">
               <h2 className="font-bold text-lg mb-1">Tampilan Toko</h2>
-              <p className="text-sm text-gray-500 mb-5">Atur nama, logo, banner, warna, dan font toko yang tampil ke pembeli.</p>
+              <p className="text-sm text-gray-500 mb-5">Atur nama, logo, warna, dan font toko. Untuk banner, gunakan tab <strong>Banner</strong>.</p>
 
               <div className="space-y-5">
                 <div>
@@ -289,30 +520,6 @@ export default function SellerDashboard() {
                     </div>
                     {brandingForm.logo && (
                       <img src={brandingForm.logo} alt="Logo" className="w-16 h-16 rounded-full object-cover border flex-shrink-0" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banner Toko</label>
-                  <p className="text-xs text-gray-500 mb-2">Ukuran rekomendasi: <span className="font-medium">1200 × 300 px</span> — format horizontal/landscape, maks. 5 MB</p>
-                  <div className="space-y-2">
-                    <input
-                      value={brandingForm.banner}
-                      onChange={(e) => setBrandingForm((p) => ({ ...p, banner: e.target.value }))}
-                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                      placeholder="https://... atau upload gambar banner"
-                    />
-                    <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); }} />
-                    <button
-                      onClick={() => bannerInputRef.current?.click()}
-                      disabled={uploadingBanner}
-                      className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50"
-                    >
-                      {uploadingBanner ? "Mengupload..." : "Upload Gambar"}
-                    </button>
-                    {brandingForm.banner && (
-                      <img src={brandingForm.banner} alt="Banner" className="w-full rounded-lg object-cover max-h-40 mt-2 border" onError={(e) => (e.currentTarget.style.display = "none")} />
                     )}
                   </div>
                 </div>

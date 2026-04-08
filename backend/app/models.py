@@ -126,3 +126,14 @@ class OrderItem(Base):
     price = Column(Float, nullable=False)
     weight = Column(Integer, default=500)
     order = relationship("Order", back_populates="items")
+
+
+class Banner(Base):
+    __tablename__ = "banners"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    image_url = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    link = Column(String, nullable=True)
+    order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
