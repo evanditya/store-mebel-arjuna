@@ -191,6 +191,47 @@ def send_order_paid_email(order, user, seller_name: str = "Toko Online") -> bool
     return _send_email(user.email, subject, html)
 
 
+def send_order_shipped_email(order, user, seller_name: str = "Toko Online") -> bool:
+    subject = f"Pesanan #{order.id[:8].upper()} – Paket Sedang Dikirim | {seller_name}"
+    tracking_url = order.tracking_url or ""
+    tracking_btn = f'<br/><a href="{tracking_url}" class="btn">Lacak Paket</a>' if tracking_url else ""
+    courier_name = f"{(order.courier_company or '').upper()} {order.courier_service_name or ''}".strip()
+    items_table = _items_table(order.items)
+    content = f"""
+    <div class="section">
+      <p>Halo <strong>{user.name}</strong>,</p>
+      <p>Paket pesananmu sudah <strong>dikirimkan</strong> oleh penjual. Pantau terus pengirimannya ya!</p>
+      <span class="badge badge-blue">Paket Dikirim</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Informasi Pengiriman</div>
+      <div class="info-row"><span class="info-label">Kurir</span><span>{courier_name or '-'}</span></div>
+      <div class="info-row"><span class="info-label">No. Resi</span><span><strong>{order.waybill_id or '-'}</strong></span></div>
+      <div class="info-row"><span class="info-label">Estimasi Tiba</span><span>{order.shipping_etd or '-'}</span></div>
+      {tracking_btn}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Alamat Tujuan</div>
+      <div class="info-row"><span class="info-label">Penerima</span><span>{order.destination_contact_name or user.name}</span></div>
+      <div class="info-row"><span class="info-label">Alamat</span><span style="text-align:right;max-width:60%">{order.shipping_address or '-'}</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Ringkasan Pesanan</div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:10px">Kode Pesanan: <strong>#{order.id[:8].upper()}</strong></p>
+      {items_table}
+    </div>
+
+    <div class="note-box" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af">
+      📦 Klik tombol di atas untuk melacak paketmu secara real-time.
+    </div>
+    """
+    html = _base_template(content, seller_name)
+    return _send_email(user.email, subject, html)
+
+
 def send_order_completed_email(order, user, seller_name: str = "Toko Online") -> bool:
     subject = f"Pesanan #{order.id[:8].upper()} – Barang Telah Diterima | {seller_name}"
     items_table = _items_table(order.items)

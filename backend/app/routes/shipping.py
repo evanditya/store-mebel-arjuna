@@ -8,6 +8,8 @@ from app.config import BITESHIP_API_KEY
 import httpx
 from datetime import datetime
 import json
+import threading
+import os as _os
 
 router = APIRouter(prefix="/api/shipping")
 
@@ -329,6 +331,20 @@ async def create_shipment(order_id: str, request: Request, db: Session = Depends
         order.status = "shipped"
         order.updated_at = datetime.utcnow()
         db.commit()
+        if buyer:
+            try:
+                from app.email import send_order_shipped_email
+                config_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
+                seller_name = "Toko Online"
+                try:
+                    with open(config_path) as _f:
+                        _cfg = json.load(_f)
+                        seller_name = _cfg.get("site_name") or _cfg.get("seller_name") or seller_name
+                except Exception:
+                    pass
+                threading.Thread(target=send_order_shipped_email, args=(order, buyer, seller_name), daemon=True).start()
+            except Exception as _e:
+                print(f"[Email] shipped email error: {_e}")
         return {
             "success": True,
             "biteship_order_id": order.biteship_order_id,
