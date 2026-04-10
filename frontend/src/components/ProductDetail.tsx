@@ -105,11 +105,6 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     return { min: product.price, max: product.price };
   }, [combinations, displayVariants, product.price]);
 
-  const allVariantsSelected = variantTypes.length === 0 || variantTypes.every((t) => t in selectedVariants);
-  const canAddToCart = allVariantsSelected && !comboUnavailable;
-
-  const missingVariants = variantTypes.filter((t) => !(t in selectedVariants));
-
   const isOptionAvailableInCombos = useMemo(() => {
     if (combinations.length === 0 || variantTypes.length <= 1) return (_type: string, _name: string) => true;
     return (type: string, optName: string) => {
@@ -137,6 +132,10 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     if (!matchedCombo) return false;
     return !matchedCombo.is_available;
   }, [matchedCombo]);
+
+  const allVariantsSelected = variantTypes.length === 0 || variantTypes.every((t) => t in selectedVariants);
+  const canAddToCart = allVariantsSelected && !comboUnavailable;
+  const missingVariants = variantTypes.filter((t) => !(t in selectedVariants));
 
   const combinedVariantName = variantTypes.map((t) => selectedVariants[t]).filter(Boolean).join(" / ") || undefined;
 
