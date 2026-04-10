@@ -87,6 +87,29 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     return new Set(prices).size > 1;
   }, [displayVariants, product.price]);
 
+  const priceRange = useMemo(() => {
+    if (combinations.length > 0) {
+      const available = combinations.filter((c) => c.is_available);
+      if (available.length > 0) {
+        const prices = available.map((c) => getVariantPrice(c, product.price));
+        return { min: Math.min(...prices), max: Math.max(...prices) };
+      }
+    }
+    if (displayVariants.length > 0) {
+      const available = displayVariants.filter((v) => v.is_available);
+      if (available.length > 0) {
+        const prices = available.map((v) => getVariantPrice(v, product.price));
+        return { min: Math.min(...prices), max: Math.max(...prices) };
+      }
+    }
+    return { min: product.price, max: product.price };
+  }, [combinations, displayVariants, product.price]);
+
+  const allVariantsSelected = variantTypes.length === 0 || variantTypes.every((t) => t in selectedVariants);
+  const canAddToCart = allVariantsSelected && !comboUnavailable;
+
+  const missingVariants = variantTypes.filter((t) => !(t in selectedVariants));
+
   const isOptionAvailableInCombos = useMemo(() => {
     if (combinations.length === 0 || variantTypes.length <= 1) return (_type: string, _name: string) => true;
     return (type: string, optName: string) => {
@@ -143,8 +166,16 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
             </div>
           )}
           <h2 className="text-lg font-bold mb-1">{product.name}</h2>
-          <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(displayPrice)}</p>
-          {product.original_price && product.original_price > displayPrice && <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(product.original_price)}</p>}
+          {allVariantsSelected && !comboUnavailable ? (
+            <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(displayPrice)}</p>
+          ) : priceRange.min !== priceRange.max ? (
+            <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(priceRange.min)} – {formatPrice(priceRange.max)}</p>
+          ) : (
+            <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(priceRange.min)}</p>
+          )}
+          {allVariantsSelected && !comboUnavailable && product.original_price && product.original_price > displayPrice && (
+            <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(product.original_price)}</p>
+          )}
           {comboUnavailable && <p className="text-sm text-orange-500 mb-1">Kombinasi ini tidak tersedia, menggunakan harga dasar</p>}
           <p className="text-sm text-gray-500 mb-4">{formatSoldCount(product.sold_count)}</p>
           {displayVariants.length > 0 && (
@@ -219,7 +250,21 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 bg-white border-t p-4">
-          <button onClick={() => onAddToCart(product, combinedVariantName, quantity)} className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition" data-testid="button-add-to-cart">Tambah ke Keranjang - {formatPrice(displayPrice * quantity)}</button>
+          {!canAddToCart && missingVariants.length > 0 && (
+            <p className="text-xs text-orange-500 text-center mb-2">
+              Pilih <strong>{missingVariants.join(", ")}</strong> terlebih dahulu
+            </p>
+          )}
+          <button
+            onClick={() => canAddToCart && onAddToCart(product, combinedVariantName, quantity)}
+            disabled={!canAddToCart}
+            className={`w-full py-3 rounded-lg font-medium transition ${canAddToCart ? "bg-gray-900 text-white hover:bg-gray-800 cursor-pointer" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
+            data-testid="button-add-to-cart"
+          >
+            {canAddToCart
+              ? `Tambah ke Keranjang${allVariantsSelected ? ` - ${formatPrice(displayPrice * quantity)}` : ""}`
+              : `Pilih ${missingVariants[0] || "Varian"} Terlebih Dahulu`}
+          </button>
         </div>
       </div>
     </div>

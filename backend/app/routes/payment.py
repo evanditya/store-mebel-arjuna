@@ -2,13 +2,38 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Order, OrderItem
+from app.models import Order, OrderItem, User
 from app.config import MIDTRANS_SERVER_KEY, MIDTRANS_CLIENT_KEY, MIDTRANS_IS_PRODUCTION
 from app.routes.auth import get_current_user
 import httpx
 import base64
 import hashlib
+import threading
+import json as _json
+import os as _os
 from datetime import datetime
+
+_SELLER_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
+
+
+def _get_seller_name() -> str:
+    try:
+        with open(_SELLER_CONFIG_PATH) as f:
+            d = _json.load(f)
+            return d.get("site_name") or d.get("seller_name") or "Toko Online"
+    except Exception:
+        return "Toko Online"
+
+
+def _maybe_send_paid_email(order, db: Session):
+    try:
+        buyer = db.query(User).filter(User.id == order.user_id).first()
+        if buyer:
+            from app.email import send_order_paid_email
+            seller_name = _get_seller_name()
+            threading.Thread(target=send_order_paid_email, args=(order, buyer, seller_name), daemon=True).start()
+    except Exception as e:
+        print(f"[Email] paid email error: {e}")
 
 router = APIRouter(prefix="/api/payment")
 
@@ -198,6 +223,7 @@ async def check_payment_status(order_id: str, request: Request, db: Session = De
 
     if resp.status_code == 200:
         data = resp.json()
+        prev_status = order.status
         _apply_transaction_status(
             order,
             data.get("transaction_status", ""),
@@ -205,6 +231,8 @@ async def check_payment_status(order_id: str, request: Request, db: Session = De
             data.get("transaction_id"),
         )
         db.commit()
+        if prev_status != "paid" and order.status == "paid":
+            _maybe_send_paid_email(order, db)
         return {"order_id": order.id, "status": order.status, "transaction_status": data.get("transaction_status")}
 
     return {"order_id": order.id, "status": order.status}
@@ -233,6 +261,9 @@ async def payment_notification(request: Request, db: Session = Depends(get_db)):
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
 
+    prev_status = order.status
     _apply_transaction_status(order, transaction_status, fraud_status, transaction_id)
     db.commit()
+    if prev_status != "paid" and order.status == "paid":
+        _maybe_send_paid_email(order, db)
     return {"success": True}

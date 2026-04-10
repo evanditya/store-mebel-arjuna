@@ -2,11 +2,34 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Order, OrderItem, CartItem, Product, gen_id
+from app.models import Order, OrderItem, CartItem, Product, User, gen_id
 from app.routes.auth import get_current_user
 from datetime import datetime
+import threading
+import json as _json
+import os as _os
 
 router = APIRouter(prefix="/api")
+
+_SELLER_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
+
+
+def _get_seller_name() -> str:
+    try:
+        with open(_SELLER_CONFIG_PATH) as f:
+            d = _json.load(f)
+            return d.get("site_name") or d.get("seller_name") or "Toko Online"
+    except Exception:
+        return "Toko Online"
+
+
+def _send_email_bg(fn, *args):
+    def target():
+        try:
+            fn(*args)
+        except Exception as e:
+            print(f"[Email BG] Error: {e}")
+    threading.Thread(target=target, daemon=True).start()
 
 
 def order_to_dict(order: Order) -> dict:
@@ -156,6 +179,12 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
     db.query(CartItem).filter(CartItem.user_id == user.id).delete()
     db.commit()
     db.refresh(order)
+    try:
+        from app.email import send_order_pending_email
+        seller_name = _get_seller_name()
+        _send_email_bg(send_order_pending_email, order, user, seller_name)
+    except Exception:
+        pass
     return {"order": order_to_dict(order)}
 
 
@@ -170,8 +199,18 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
+    prev_status = order.status
     order.status = status
     order.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(order)
+    if status == "completed" and prev_status != "completed":
+        try:
+            buyer = db.query(User).filter(User.id == order.user_id).first()
+            if buyer:
+                from app.email import send_order_completed_email
+                seller_name = _get_seller_name()
+                _send_email_bg(send_order_completed_email, order, buyer, seller_name)
+        except Exception:
+            pass
     return {"order": order_to_dict(order)}

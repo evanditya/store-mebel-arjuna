@@ -67,10 +67,20 @@ declare global {
   }
 }
 
+const STATUS_TABS: { key: string; label: string; statuses: string[] }[] = [
+  { key: "all", label: "Semua", statuses: [] },
+  { key: "pending", label: "Belum Dibayar", statuses: ["pending"] },
+  { key: "processing", label: "Dikemas", statuses: ["paid", "processing"] },
+  { key: "shipped", label: "Dikirim", statuses: ["shipped"] },
+  { key: "completed", label: "Selesai", statuses: ["completed"] },
+  { key: "cancelled", label: "Dibatalkan", statuses: ["cancelled"] },
+];
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("all");
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [snapReady, setSnapReady] = useState(false);
   const [midtransClientKey, setMidtransClientKey] = useState("");
@@ -126,6 +136,14 @@ export default function OrdersPage() {
     setTrackingLoading(false);
   };
 
+  const sortedOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const activeTabDef = STATUS_TABS.find((t) => t.key === activeTab) || STATUS_TABS[0];
+  const filteredOrders = activeTabDef.statuses.length === 0 ? sortedOrders : sortedOrders.filter((o) => activeTabDef.statuses.includes(o.status));
+  const tabCounts = STATUS_TABS.map((tab) => ({
+    key: tab.key,
+    count: tab.statuses.length === 0 ? orders.length : orders.filter((o) => tab.statuses.includes(o.status)).length,
+  }));
+
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Memuat...</div></div>;
 
   return (
@@ -135,16 +153,33 @@ export default function OrdersPage() {
           <Link href="/" className="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></Link>
           <h1 className="text-lg font-bold">Pesanan Saya</h1>
         </div>
+        <div className="flex overflow-x-auto border-t">
+          {STATUS_TABS.map((tab) => {
+            const cnt = tabCounts.find((t) => t.key === tab.key)?.count ?? 0;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap flex-shrink-0 border-b-2 transition ${activeTab === tab.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+              >
+                {tab.label}
+                {cnt > 0 && tab.key !== "all" && (
+                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>{cnt}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </header>
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-400 mb-4">Belum ada pesanan</p>
-            <Link href="/" className="bg-gray-900 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition">Mulai Belanja</Link>
+            <p className="text-gray-400 mb-4">{activeTab === "all" ? "Belum ada pesanan" : "Tidak ada pesanan di kategori ini"}</p>
+            {activeTab === "all" && <Link href="/" className="bg-gray-900 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition">Mulai Belanja</Link>}
           </div>
         ) : (
           <div className="space-y-3">
-            {orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => {
+            {filteredOrders.map((order) => {
               const st = statusLabels[order.status] || statusLabels.pending;
               const isPending = order.status === "pending";
               const isPaying = payingOrderId === order.id;
