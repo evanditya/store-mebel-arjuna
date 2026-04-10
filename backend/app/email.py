@@ -3,27 +3,30 @@ import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USER = os.environ.get("EMAIL_USER", "")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
-EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Toko Online")
-
 
 def _send_email(to: str, subject: str, html: str) -> bool:
-    if not EMAIL_HOST or not EMAIL_USER or not EMAIL_PASSWORD or not to:
+    host = os.environ.get("EMAIL_HOST", "")
+    port = int(os.environ.get("EMAIL_PORT", "587"))
+    user = os.environ.get("EMAIL_USER", "")
+    password = os.environ.get("EMAIL_PASSWORD", "")
+    from_name = os.environ.get("EMAIL_FROM_NAME", "Toko Online")
+
+    if not host or not user or not password or not to:
+        print(f"[Email] Skipping — EMAIL_HOST/USER/PASSWORD not fully configured")
         return False
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
+        msg["From"] = f"{from_name} <{user}>"
         msg["To"] = to
         msg.attach(MIMEText(html, "html", "utf-8"))
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=10) as server:
+        with smtplib.SMTP(host, port, timeout=15) as server:
             server.ehlo()
             server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_USER, [to], msg.as_string())
+            server.ehlo()
+            server.login(user, password)
+            server.sendmail(user, [to], msg.as_string())
+        print(f"[Email] Sent '{subject}' to {to}")
         return True
     except Exception as e:
         print(f"[Email] Failed to send to {to}: {e}")
