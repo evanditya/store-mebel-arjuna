@@ -52,21 +52,21 @@ FALLBACK_ORIGIN_AREA_ID = "IDNP6IDNC153IDND2256IDZ10110"
 FALLBACK_ORIGIN_POSTAL_CODE = "10110"
 
 KNOWN_COURIERS = [
-    {"code": "jne", "name": "JNE"},
-    {"code": "sicepat", "name": "SiCepat"},
-    {"code": "jnt", "name": "J&T Express"},
     {"code": "anteraja", "name": "Anteraja"},
-    {"code": "tiki", "name": "TIKI"},
-    {"code": "ninja", "name": "Ninja Xpress"},
-    {"code": "idexpress", "name": "ID Express"},
-    {"code": "pos", "name": "Pos Indonesia"},
-    {"code": "paxel", "name": "Paxel"},
-    {"code": "lion", "name": "Lion Parcel"},
-    {"code": "sap", "name": "SAP Express"},
-    {"code": "rpx", "name": "RPX Holding"},
     {"code": "borzo", "name": "Borzo"},
-    {"code": "grab", "name": "GrabExpress"},
     {"code": "gosend", "name": "GoSend"},
+    {"code": "grab", "name": "GrabExpress"},
+    {"code": "idexpress", "name": "ID Express"},
+    {"code": "jnt", "name": "J&T Express"},
+    {"code": "jne", "name": "JNE"},
+    {"code": "lion", "name": "Lion Parcel"},
+    {"code": "ninja", "name": "Ninja Xpress"},
+    {"code": "paxel", "name": "Paxel"},
+    {"code": "pos", "name": "Pos Indonesia"},
+    {"code": "rpx", "name": "RPX Holding"},
+    {"code": "sap", "name": "SAP Express"},
+    {"code": "sicepat", "name": "SiCepat"},
+    {"code": "tiki", "name": "TIKI"},
 ]
 
 
