@@ -13,6 +13,62 @@ import io
 
 router = APIRouter(prefix="/api")
 
+EXCEL_COLUMNS = [
+    "Nama Produk", "Harga", "Harga Coret", "Stok",
+    "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
+    "Kategori", "Deskripsi", "Video Produk", "Varian Produk",
+]
+
+
+def _variants_to_str(variants) -> str:
+    """Encode variants as pipe-separated string: Tipe:Nama:Harga:Stok:Tersedia"""
+    parts = []
+    for v in variants:
+        harga = str(int(v.price)) if v.price is not None else ""
+        stok = str(v.stock or 0)
+        tersedia = "Ya" if v.is_available else "Tidak"
+        tipe = v.variant_type or ""
+        nama = v.variant_name or ""
+        parts.append(f"{tipe}:{nama}:{harga}:{stok}:{tersedia}")
+    return " | ".join(parts)
+
+
+def _str_to_variants(raw: str):
+    """Decode pipe-separated variant string back into list of dicts."""
+    variants = []
+    if not raw or not raw.strip():
+        return variants
+    for part in raw.split("|"):
+        part = part.strip()
+        if not part:
+            continue
+        fields = part.split(":")
+        if len(fields) < 2:
+            continue
+        tipe = fields[0].strip()
+        nama = fields[1].strip() if len(fields) > 1 else ""
+        harga_raw = fields[2].strip() if len(fields) > 2 else ""
+        stok_raw = fields[3].strip() if len(fields) > 3 else "0"
+        tersedia_raw = fields[4].strip().lower() if len(fields) > 4 else "ya"
+        try:
+            harga = float(harga_raw) if harga_raw else None
+        except ValueError:
+            harga = None
+        try:
+            stok = int(stok_raw)
+        except ValueError:
+            stok = 0
+        is_available = tersedia_raw not in ("tidak", "no", "false", "0")
+        variants.append({
+            "variant_type": tipe,
+            "variant_name": nama,
+            "price": harga,
+            "stock": stok,
+            "is_available": is_available,
+        })
+    return variants
+
+
 SELLER_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "seller_config.json")
 
 
