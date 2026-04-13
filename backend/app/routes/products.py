@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Product, ProductImage, ProductVariant, gen_id
@@ -9,6 +9,7 @@ import os
 import re
 import random
 import string
+import io
 
 router = APIRouter(prefix="/api")
 
@@ -147,6 +148,191 @@ async def list_categories(db: Session = Depends(get_db)):
     return {"categories": sorted([c[0] for c in cats if c[0]])}
 
 
+@router.get("/products/export-excel")
+async def export_products_excel(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != "seller":
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    products = db.query(Product).options(joinedload(Product.variants)).order_by(Product.name).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Produk"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="1F2937")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    thin = Side(style="thin", color="D1D5DB")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    col_widths = [40, 15, 15, 10, 12, 12, 12, 12, 20, 50, 35, 60]
+
+    for col_idx, (col_name, width) in enumerate(zip(EXCEL_COLUMNS, col_widths), start=1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = border
+        ws.column_dimensions[cell.column_letter].width = width
+
+    ws.row_dimensions[1].height = 25
+
+    for row_idx, product in enumerate(products, start=2):
+        row = [
+            product.name,
+            int(product.price),
+            int(product.original_price) if product.original_price else "",
+            product.stock or 0,
+            product.weight or 500,
+            product.length or 10,
+            product.width or 10,
+            product.height or 10,
+            product.category or "",
+            product.description or "",
+            product.video_url or "",
+            _variants_to_str(product.variants),
+        ]
+        for col_idx, value in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = border
+            cell.alignment = left
+            if col_idx in (2, 3):
+                cell.number_format = '#,##0'
+        ws.row_dimensions[row_idx].height = 18
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=produk.xlsx"},
+    )
+
+
+@router.post("/products/import-excel")
+async def import_products_excel(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != "seller":
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+
+    if not file.filename.endswith((".xlsx", ".xls")):
+        return JSONResponse({"error": "File harus berformat .xlsx"}, status_code=400)
+
+    from openpyxl import load_workbook
+
+    content = await file.read()
+    try:
+        wb = load_workbook(filename=io.BytesIO(content), data_only=True)
+    except Exception as e:
+        return JSONResponse({"error": f"File Excel tidak valid: {e}"}, status_code=400)
+
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return JSONResponse({"error": "File kosong"}, status_code=400)
+
+    header = [str(h).strip() if h is not None else "" for h in rows[0]]
+    col = {name: idx for idx, name in enumerate(header)}
+
+    if "Nama Produk" not in col:
+        return JSONResponse({"error": "Kolom 'Nama Produk' tidak ditemukan di header"}, status_code=400)
+
+    total = 0
+    updated = 0
+    not_found = []
+    errors = []
+
+    for row_num, row in enumerate(rows[1:], start=2):
+        def cell(name, _row=row, _col=col):
+            idx = _col.get(name)
+            if idx is None:
+                return None
+            return _row[idx] if idx < len(_row) else None
+
+        nama = str(cell("Nama Produk") or "").strip()
+        if not nama:
+            continue
+        total += 1
+
+        product = db.query(Product).filter(Product.name == nama).first()
+        if not product:
+            not_found.append(nama)
+            continue
+
+        try:
+            harga = cell("Harga")
+            if harga is not None and str(harga).strip() != "":
+                product.price = float(str(harga).replace(",", "").replace(".", "").strip()) if isinstance(harga, str) else float(harga)
+
+            harga_coret = cell("Harga Coret")
+            if harga_coret is not None and str(harga_coret).strip() not in ("", "0"):
+                try:
+                    product.original_price = float(str(harga_coret).replace(",", "").replace(".", "").strip()) if isinstance(harga_coret, str) else float(harga_coret)
+                except (ValueError, TypeError):
+                    product.original_price = None
+            elif harga_coret is not None and str(harga_coret).strip() == "":
+                product.original_price = None
+
+            for attr, col_name in [("stock", "Stok"), ("weight", "Berat (gram)"), ("length", "Panjang (cm)"), ("width", "Lebar (cm)"), ("height", "Tinggi (cm)")]:
+                val = cell(col_name)
+                if val is not None and str(val).strip() != "":
+                    try:
+                        setattr(product, attr, int(float(str(val).strip())))
+                    except (ValueError, TypeError):
+                        pass
+
+            for attr, col_name in [("category", "Kategori"), ("description", "Deskripsi"), ("video_url", "Video Produk")]:
+                val = cell(col_name)
+                if val is not None:
+                    setattr(product, attr, str(val).strip() if str(val).strip() else None)
+
+            varian_raw = cell("Varian Produk")
+            if varian_raw is not None and str(varian_raw).strip():
+                new_variants = _str_to_variants(str(varian_raw))
+                existing = {v.variant_name: v for v in product.variants}
+                for vd in new_variants:
+                    vname = vd["variant_name"]
+                    if vname in existing:
+                        v = existing[vname]
+                        v.variant_type = vd["variant_type"]
+                        if vd["price"] is not None:
+                            v.price = vd["price"]
+                        v.stock = vd["stock"]
+                        v.is_available = vd["is_available"]
+                    else:
+                        db.add(ProductVariant(
+                            id=gen_id(),
+                            product_id=product.id,
+                            variant_type=vd["variant_type"],
+                            variant_name=vd["variant_name"],
+                            price=vd["price"],
+                            price_modifier=0.0,
+                            stock=vd["stock"],
+                            is_available=vd["is_available"],
+                        ))
+
+            db.commit()
+            updated += 1
+        except Exception as e:
+            db.rollback()
+            errors.append({"row": row_num, "name": nama, "error": str(e)})
+
+    return {
+        "total": total,
+        "updated": updated,
+        "not_found": not_found,
+        "not_found_count": len(not_found),
+        "errors": errors,
+        "error_count": len(errors),
+    }
+
+
 @router.get("/products/{slug}")
 async def get_product(slug: str, db: Session = Depends(get_db)):
     product = db.query(Product).options(
@@ -247,3 +433,7 @@ async def delete_product(slug: str, request: Request, db: Session = Depends(get_
     db.delete(product)
     db.commit()
     return {"success": True}
+
+    parts = []
+    for v in variants:
+        harga = str(int(v.price)) if v.price is not None else ""

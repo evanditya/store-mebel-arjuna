@@ -151,6 +151,10 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  const [excelImporting, setExcelImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ total: number; updated: number; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
   const [allCouriers, setAllCouriers] = useState<{ code: string; name: string }[]>([]);
@@ -251,7 +255,7 @@ export default function SellerDashboard() {
 
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
-    Promise.all([fetch("/api/products").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
+    Promise.all([fetch("/api/products?limit=1000").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => {
       setShippingAvailable(data.available);
       if (data.available) {
@@ -344,6 +348,30 @@ export default function SellerDashboard() {
   };
 
   const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) setProducts((prev) => prev.filter((p) => p.slug !== slug)); };
+
+  const handleExcelExport = () => { window.open("/api/products/export-excel", "_blank"); };
+
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setExcelImporting(true);
+    setImportResult(null);
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch("/api/products/import-excel", { method: "POST", body: form });
+      const data = await res.json();
+      if (data.error) { alert(data.error); }
+      else {
+        setImportResult(data);
+        const res2 = await fetch("/api/products?limit=1000");
+        const d2 = await res2.json();
+        setProducts(d2.products || []);
+      }
+    } catch { alert("Gagal mengimpor file"); }
+    setExcelImporting(false);
+  };
   const handleStatusChange = async (orderId: string, newStatus: string) => { await fetch(`/api/orders`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: orderId, status: newStatus }) }); setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))); };
 
   const handleCreateShipment = async (orderId: string) => {
@@ -395,12 +423,63 @@ export default function SellerDashboard() {
         </div>
         {tab === "products" && (
           <div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <h2 className="font-bold text-lg">Daftar Produk</h2>
-              <Link href="/seller/products/new" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition" data-testid="button-add-product">+ Tambah Produk</Link>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={handleExcelExport} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Unduh Excel
+                </button>
+                <button onClick={() => excelInputRef.current?.click()} disabled={excelImporting} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12" /></svg>
+                  {excelImporting ? "Mengimpor..." : "Upload Excel"}
+                </button>
+                <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelImport} />
+                <Link href="/seller/products/new" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition" data-testid="button-add-product">+ Tambah Produk</Link>
+              </div>
             </div>
+
+            {importResult && (
+              <div className={`mb-4 rounded-lg border p-4 text-sm ${importResult.error_count > 0 || importResult.not_found_count > 0 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-gray-800 mb-2">Hasil Import Excel</p>
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      <span className="text-gray-600">Total baris: <strong>{importResult.total}</strong></span>
+                      <span className="text-green-700">Berhasil diperbarui: <strong>{importResult.updated}</strong></span>
+                      {importResult.not_found_count > 0 && <span className="text-orange-600">Produk tidak ditemukan: <strong>{importResult.not_found_count}</strong></span>}
+                      {importResult.error_count > 0 && <span className="text-red-600">Error: <strong>{importResult.error_count}</strong></span>}
+                    </div>
+                    {importResult.not_found.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-orange-700 font-medium text-xs mb-1">Nama tidak cocok (dilewati):</p>
+                        <p className="text-xs text-orange-600 break-all">{importResult.not_found.slice(0, 10).join(", ")}{importResult.not_found.length > 10 ? ` ... +${importResult.not_found.length - 10} lainnya` : ""}</p>
+                      </div>
+                    )}
+                    {importResult.errors.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-red-700 font-medium text-xs mb-1">Error per baris:</p>
+                        {importResult.errors.slice(0, 3).map((e) => <p key={e.row} className="text-xs text-red-600">Baris {e.row} ({e.name}): {e.error}</p>)}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0 text-lg leading-none">×</button>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-3">
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder={`Cari dari ${products.length} produk...`}
+                className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+
             <div className="space-y-2">
-              {products.map((product) => (
+              {products.filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.category || "").toLowerCase().includes(productSearch.toLowerCase())).map((product) => (
                 <div key={product.slug} className="bg-white rounded-lg border p-4 flex items-center gap-4" data-testid={`product-row-${product.slug}`}>
                   <img src={product.primary_image} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -414,7 +493,9 @@ export default function SellerDashboard() {
                   </div>
                 </div>
               ))}
-              {products.length === 0 && <div className="text-center py-12 text-gray-400">Belum ada produk</div>}
+              {products.filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.category || "").toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                <div className="text-center py-12 text-gray-400">{productSearch ? `Tidak ada produk yang cocok dengan "${productSearch}"` : "Belum ada produk"}</div>
+              )}
             </div>
           </div>
         )}
