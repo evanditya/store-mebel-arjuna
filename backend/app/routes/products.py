@@ -204,6 +204,32 @@ async def list_categories(db: Session = Depends(get_db)):
     return {"categories": sorted([c[0] for c in cats if c[0]])}
 
 
+def _get_purchaseable_variants(variants):
+    """Return only the variants a buyer actually selects (combinations if present, else all non-combo)."""
+    combos = [v for v in variants if v.variant_type == "_combinations"]
+    if combos:
+        return combos
+    return [v for v in variants if v.variant_type != "_combinations"]
+
+
+def _apply_sheet_style(ws, header_cols, col_widths):
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="1F2937")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin = Side(style="thin", color="D1D5DB")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col_idx, (col_name, width) in enumerate(zip(header_cols, col_widths), start=1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = border
+        ws.column_dimensions[cell.column_letter].width = width
+    ws.row_dimensions[1].height = 25
+    return border, Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+
 @router.get("/products/export-excel")
 async def export_products_excel(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -211,55 +237,60 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
     products = db.query(Product).options(joinedload(Product.variants)).order_by(Product.name).all()
 
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Produk"
 
-    header_font = Font(bold=True, color="FFFFFF", size=11)
-    header_fill = PatternFill("solid", fgColor="1F2937")
-    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    left = Alignment(horizontal="left", vertical="top", wrap_text=True)
-    thin = Side(style="thin", color="D1D5DB")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    # ── Sheet 1: Product info ────────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Produk"
+    prod_cols = ["Nama Produk", "Harga", "Harga Coret", "Stok (tanpa varian)",
+                 "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
+                 "Kategori", "Deskripsi", "Video Produk"]
+    prod_widths = [42, 16, 16, 18, 13, 13, 13, 13, 22, 55, 35]
+    border1, left1 = _apply_sheet_style(ws1, prod_cols, prod_widths)
 
-    col_widths = [40, 15, 15, 10, 12, 12, 12, 12, 20, 50, 35, 60]
-
-    for col_idx, (col_name, width) in enumerate(zip(EXCEL_COLUMNS, col_widths), start=1):
-        cell = ws.cell(row=1, column=col_idx, value=col_name)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = center
-        cell.border = border
-        ws.column_dimensions[cell.column_letter].width = width
-
-    ws.row_dimensions[1].height = 25
-
-    for row_idx, product in enumerate(products, start=2):
-        row = [
-            product.name,
-            int(product.price),
-            int(product.original_price) if product.original_price else "",
-            product.stock or 0,
-            product.weight or 500,
-            product.length or 10,
-            product.width or 10,
-            product.height or 10,
-            product.category or "",
-            product.description or "",
-            product.video_url or "",
-            _variants_to_str(product.variants),
-        ]
+    for row_idx, p in enumerate(products, start=2):
+        display_variants = _get_purchaseable_variants(p.variants)
+        # For products WITH variants, stock is managed per-variant in Sheet 2
+        stok_cell = "" if display_variants else (p.stock or 0)
+        row = [p.name, int(p.price),
+               int(p.original_price) if p.original_price else "",
+               stok_cell,
+               p.weight or 500, p.length or 10, p.width or 10, p.height or 10,
+               p.category or "", p.description or "", p.video_url or ""]
         for col_idx, value in enumerate(row, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            cell.border = border
-            cell.alignment = left
+            cell = ws1.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = border1
+            cell.alignment = left1
             if col_idx in (2, 3):
                 cell.number_format = '#,##0'
-        ws.row_dimensions[row_idx].height = 18
+        ws1.row_dimensions[row_idx].height = 18
+
+    # ── Sheet 2: Variants (one row per purchaseable variant) ─────────────────
+    ws2 = wb.create_sheet(title="Varian")
+    var_cols = ["Nama Produk", "Nama Varian", "Harga", "Stok", "Tersedia (Ya/Tidak)"]
+    var_widths = [42, 45, 16, 10, 18]
+    border2, left2 = _apply_sheet_style(ws2, var_cols, var_widths)
+
+    row_idx = 2
+    for p in products:
+        display_variants = _get_purchaseable_variants(p.variants)
+        for v in display_variants:
+            display_name = v.variant_name  # e.g. "divan dan sandaran / 120x200" or "Merah"
+            row = [p.name, display_name,
+                   int(v.price) if v.price is not None else int(p.price),
+                   v.stock or 0,
+                   "Ya" if v.is_available else "Tidak"]
+            for col_idx, value in enumerate(row, start=1):
+                cell = ws2.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border2
+                cell.alignment = left2
+                if col_idx == 3:
+                    cell.number_format = '#,##0'
+            ws2.row_dimensions[row_idx].height = 18
+            row_idx += 1
 
     stream = io.BytesIO()
     wb.save(stream)
@@ -288,103 +319,140 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
     except Exception as e:
         return JSONResponse({"error": f"File Excel tidak valid: {e}"}, status_code=400)
 
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        return JSONResponse({"error": "File kosong"}, status_code=400)
+    def _get_col(header_row):
+        return {str(h).strip() if h is not None else "": idx for idx, h in enumerate(header_row)}
 
-    header = [str(h).strip() if h is not None else "" for h in rows[0]]
-    col = {name: idx for idx, name in enumerate(header)}
+    def _cell(row, col_map, name):
+        idx = col_map.get(name)
+        if idx is None:
+            return None
+        return row[idx] if idx < len(row) else None
 
-    if "Nama Produk" not in col:
-        return JSONResponse({"error": "Kolom 'Nama Produk' tidak ditemukan di header"}, status_code=400)
+    def _parse_num(val):
+        if val is None:
+            return None
+        s = str(val).replace(",", "").replace(".", "").strip() if isinstance(val, str) else str(val)
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return None
 
-    total = 0
-    updated = 0
+    total_prod = 0
+    updated_prod = 0
+    total_var = 0
+    updated_var = 0
     not_found = []
     errors = []
 
-    for row_num, row in enumerate(rows[1:], start=2):
-        def cell(name, _row=row, _col=col):
-            idx = _col.get(name)
-            if idx is None:
-                return None
-            return _row[idx] if idx < len(_row) else None
+    # ── Sheet 1: Product info ────────────────────────────────────────────────
+    ws1 = wb.active
+    rows1 = list(ws1.iter_rows(values_only=True))
+    if rows1:
+        col1 = _get_col(rows1[0])
+        if "Nama Produk" not in col1:
+            return JSONResponse({"error": "Sheet 'Produk': kolom 'Nama Produk' tidak ditemukan"}, status_code=400)
 
-        nama = str(cell("Nama Produk") or "").strip()
-        if not nama:
-            continue
-        total += 1
+        for row_num, row in enumerate(rows1[1:], start=2):
+            nama = str(_cell(row, col1, "Nama Produk") or "").strip()
+            if not nama:
+                continue
+            total_prod += 1
+            product = db.query(Product).filter(Product.name == nama).first()
+            if not product:
+                not_found.append(nama)
+                continue
+            try:
+                harga = _parse_num(_cell(row, col1, "Harga"))
+                if harga is not None:
+                    product.price = harga
 
-        product = db.query(Product).filter(Product.name == nama).first()
-        if not product:
-            not_found.append(nama)
-            continue
-
-        try:
-            harga = cell("Harga")
-            if harga is not None and str(harga).strip() != "":
-                product.price = float(str(harga).replace(",", "").replace(".", "").strip()) if isinstance(harga, str) else float(harga)
-
-            harga_coret = cell("Harga Coret")
-            if harga_coret is not None and str(harga_coret).strip() not in ("", "0"):
-                try:
-                    product.original_price = float(str(harga_coret).replace(",", "").replace(".", "").strip()) if isinstance(harga_coret, str) else float(harga_coret)
-                except (ValueError, TypeError):
+                harga_coret_raw = _cell(row, col1, "Harga Coret")
+                if harga_coret_raw is not None and str(harga_coret_raw).strip() != "":
+                    hc = _parse_num(harga_coret_raw)
+                    product.original_price = hc if hc and hc > 0 else None
+                elif harga_coret_raw is not None:
                     product.original_price = None
-            elif harga_coret is not None and str(harga_coret).strip() == "":
-                product.original_price = None
 
-            for attr, col_name in [("stock", "Stok"), ("weight", "Berat (gram)"), ("length", "Panjang (cm)"), ("width", "Lebar (cm)"), ("height", "Tinggi (cm)")]:
-                val = cell(col_name)
-                if val is not None and str(val).strip() != "":
+                stok_raw = _cell(row, col1, "Stok (tanpa varian)")
+                if stok_raw is not None and str(stok_raw).strip() not in ("", "-"):
                     try:
-                        setattr(product, attr, int(float(str(val).strip())))
+                        product.stock = int(float(str(stok_raw).strip()))
                     except (ValueError, TypeError):
                         pass
 
-            for attr, col_name in [("category", "Kategori"), ("description", "Deskripsi"), ("video_url", "Video Produk")]:
-                val = cell(col_name)
-                if val is not None:
-                    setattr(product, attr, str(val).strip() if str(val).strip() else None)
+                for attr, col_name in [("weight", "Berat (gram)"), ("length", "Panjang (cm)"),
+                                        ("width", "Lebar (cm)"), ("height", "Tinggi (cm)")]:
+                    val = _cell(row, col1, col_name)
+                    if val is not None and str(val).strip() != "":
+                        try:
+                            setattr(product, attr, int(float(str(val).strip())))
+                        except (ValueError, TypeError):
+                            pass
 
-            varian_raw = cell("Varian Produk")
-            if varian_raw is not None and str(varian_raw).strip():
-                new_variants = _str_to_variants(str(varian_raw))
-                existing = {v.variant_name: v for v in product.variants}
-                for vd in new_variants:
-                    vname = vd["variant_name"]
-                    if vname in existing:
-                        v = existing[vname]
-                        v.variant_type = vd["variant_type"]
-                        if vd["price"] is not None:
-                            v.price = vd["price"]
-                        v.stock = vd["stock"]
-                        v.is_available = vd["is_available"]
-                    else:
-                        db.add(ProductVariant(
-                            id=gen_id(),
-                            product_id=product.id,
-                            variant_type=vd["variant_type"],
-                            variant_name=vd["variant_name"],
-                            price=vd["price"],
-                            price_modifier=0.0,
-                            stock=vd["stock"],
-                            is_available=vd["is_available"],
-                        ))
+                for attr, col_name in [("category", "Kategori"), ("description", "Deskripsi"), ("video_url", "Video Produk")]:
+                    val = _cell(row, col1, col_name)
+                    if val is not None:
+                        setattr(product, attr, str(val).strip() or None)
 
-            db.commit()
-            updated += 1
-        except Exception as e:
-            db.rollback()
-            errors.append({"row": row_num, "name": nama, "error": str(e)})
+                db.commit()
+                updated_prod += 1
+            except Exception as e:
+                db.rollback()
+                errors.append({"sheet": "Produk", "row": row_num, "name": nama, "error": str(e)})
+
+    # ── Sheet 2: Variants ────────────────────────────────────────────────────
+    ws2 = wb["Varian"] if "Varian" in wb.sheetnames else None
+    if ws2 is not None:
+        rows2 = list(ws2.iter_rows(values_only=True))
+        if rows2:
+            col2 = _get_col(rows2[0])
+            for row_num, row in enumerate(rows2[1:], start=2):
+                nama = str(_cell(row, col2, "Nama Produk") or "").strip()
+                nama_varian = str(_cell(row, col2, "Nama Varian") or "").strip()
+                if not nama or not nama_varian:
+                    continue
+                total_var += 1
+                product = db.query(Product).filter(Product.name == nama).first()
+                if not product:
+                    if nama not in not_found:
+                        not_found.append(nama)
+                    continue
+                variant = next((v for v in product.variants if v.variant_name == nama_varian), None)
+                if not variant:
+                    errors.append({"sheet": "Varian", "row": row_num, "name": f"{nama} → {nama_varian}", "error": "Nama varian tidak ditemukan"})
+                    continue
+                try:
+                    harga = _parse_num(_cell(row, col2, "Harga"))
+                    if harga is not None:
+                        variant.price = harga
+
+                    stok_raw = _cell(row, col2, "Stok")
+                    if stok_raw is not None and str(stok_raw).strip() != "":
+                        try:
+                            variant.stock = int(float(str(stok_raw).strip()))
+                        except (ValueError, TypeError):
+                            pass
+
+                    tersedia_raw = str(_cell(row, col2, "Tersedia (Ya/Tidak)") or "").strip().lower()
+                    if tersedia_raw:
+                        variant.is_available = tersedia_raw not in ("tidak", "no", "false", "0")
+
+                    db.commit()
+                    updated_var += 1
+                except Exception as e:
+                    db.rollback()
+                    errors.append({"sheet": "Varian", "row": row_num, "name": f"{nama} → {nama_varian}", "error": str(e)})
 
     return {
-        "total": total,
-        "updated": updated,
+        "total": total_prod + total_var,
+        "updated": updated_prod + updated_var,
+        "detail": {
+            "produk_diperbarui": updated_prod,
+            "varian_diperbarui": updated_var,
+        },
         "not_found": not_found,
         "not_found_count": len(not_found),
-        "errors": errors,
+        "errors": [{"row": e.get("row", "?"), "name": e["name"], "error": e["error"]} for e in errors],
         "error_count": len(errors),
     }
 

@@ -157,7 +157,7 @@ export default function SellerDashboard() {
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [excelImporting, setExcelImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ total: number; updated: number; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ total: number; updated: number; detail?: { produk_diperbarui: number; varian_diperbarui: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const productMounted = useRef(false);
 
@@ -469,7 +469,10 @@ export default function SellerDashboard() {
                     <div className="flex flex-wrap gap-4 text-sm">
                       <span className="text-gray-600">Total baris: <strong>{importResult.total}</strong></span>
                       <span className="text-green-700">Berhasil diperbarui: <strong>{importResult.updated}</strong></span>
-                      {importResult.not_found_count > 0 && <span className="text-orange-600">Produk tidak ditemukan: <strong>{importResult.not_found_count}</strong></span>}
+                      {importResult.detail && (
+                        <span className="text-gray-500 text-xs">({importResult.detail.produk_diperbarui} produk · {importResult.detail.varian_diperbarui} varian)</span>
+                      )}
+                      {importResult.not_found_count > 0 && <span className="text-orange-600">Tidak ditemukan: <strong>{importResult.not_found_count}</strong></span>}
                       {importResult.error_count > 0 && <span className="text-red-600">Error: <strong>{importResult.error_count}</strong></span>}
                     </div>
                     {importResult.not_found.length > 0 && (
