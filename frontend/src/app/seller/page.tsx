@@ -146,6 +146,10 @@ function SortableBannerItem({
 export default function SellerDashboard() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [productPage, setProductPage] = useState(1);
+  const [productTotal, setProductTotal] = useState(0);
+  const [productTotalPages, setProductTotalPages] = useState(1);
+  const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings">("products");
   const [loading, setLoading] = useState(true);
@@ -155,6 +159,7 @@ export default function SellerDashboard() {
   const [excelImporting, setExcelImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ total: number; updated: number; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
+  const productMounted = useRef(false);
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
   const [allCouriers, setAllCouriers] = useState<{ code: string; name: string }[]>([]);
@@ -186,6 +191,19 @@ export default function SellerDashboard() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+
+  const loadProducts = async (page: number, search: string) => {
+    setProductLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: "20" });
+    if (search.trim()) params.set("search", search.trim());
+    const res = await fetch(`/api/products?${params}`);
+    const data = await res.json();
+    setProducts(data.products || []);
+    setProductTotal(data.total || 0);
+    setProductTotalPages(data.total_pages || 1);
+    setProductPage(page);
+    setProductLoading(false);
+  };
 
   const loadBanners = async () => {
     const res = await fetch("/api/banners/all");
@@ -254,8 +272,14 @@ export default function SellerDashboard() {
   };
 
   useEffect(() => {
+    if (!productMounted.current) { productMounted.current = true; return; }
+    const searchTimer = setTimeout(() => { loadProducts(1, productSearch); }, 350);
+    return () => clearTimeout(searchTimer);
+  }, [productSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
-    Promise.all([fetch("/api/products?limit=1000").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
+    Promise.all([loadProducts(1, ""), fetch("/api/orders").then((r) => r.json())]).then(([, orderData]: [void, { orders?: Order[] }]) => { setOrders(orderData?.orders || []); setLoading(false); });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => {
       setShippingAvailable(data.available);
       if (data.available) {
@@ -347,7 +371,7 @@ export default function SellerDashboard() {
     else setUploadingFavicon(false);
   };
 
-  const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) setProducts((prev) => prev.filter((p) => p.slug !== slug)); };
+  const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) loadProducts(productPage, productSearch); };
 
   const handleExcelExport = () => { window.open("/api/products/export-excel", "_blank"); };
 
@@ -365,9 +389,7 @@ export default function SellerDashboard() {
       if (data.error) { alert(data.error); }
       else {
         setImportResult(data);
-        const res2 = await fetch("/api/products?limit=1000");
-        const d2 = await res2.json();
-        setProducts(d2.products || []);
+        await loadProducts(1, productSearch);
       }
     } catch { alert("Gagal mengimpor file"); }
     setExcelImporting(false);
@@ -411,12 +433,12 @@ export default function SellerDashboard() {
       </header>
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Total Produk</p><p className="text-2xl font-bold" data-testid="text-total-products">{products.length}</p></div>
+          <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Total Produk</p><p className="text-2xl font-bold" data-testid="text-total-products">{productTotal}</p></div>
           <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Total Pesanan</p><p className="text-2xl font-bold" data-testid="text-total-orders">{orders.length}</p></div>
           <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Pendapatan</p><p className="text-2xl font-bold text-green-600" data-testid="text-revenue">{formatPrice(totalRevenue)}</p></div>
         </div>
         <div className="flex gap-2 mb-4">
-          <button onClick={() => setTab("products")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "products" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-products">Produk ({products.length})</button>
+          <button onClick={() => setTab("products")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "products" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-products">Produk ({productTotal})</button>
           <button onClick={() => setTab("orders")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "orders" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-orders">Pesanan ({orders.length})</button>
           <button onClick={() => setTab("banners")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "banners" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-banners">Banner ({banners.length})</button>
           <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
@@ -473,30 +495,65 @@ export default function SellerDashboard() {
                 type="text"
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                placeholder={`Cari dari ${products.length} produk...`}
+                placeholder={`Cari dari ${productTotal} produk...`}
                 className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 
-            <div className="space-y-2">
-              {products.filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.category || "").toLowerCase().includes(productSearch.toLowerCase())).map((product) => (
-                <div key={product.slug} className="bg-white rounded-lg border p-4 flex items-center gap-4" data-testid={`product-row-${product.slug}`}>
-                  <img src={product.primary_image} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate">{product.name}</h3>
-                    <p className="text-sm text-gray-500">{product.category}</p>
-                    <div className="flex gap-4 mt-1 text-sm"><span className="text-red-600 font-medium">{formatPrice(product.price)}</span><span className="text-gray-400">Stok: {product.stock}</span><span className="text-gray-400">{product.sold_count} terjual</span></div>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <Link href={`/seller/products/${product.slug}`} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-testid={`button-edit-${product.slug}`}>Edit</Link>
-                    <button onClick={() => handleDelete(product.slug)} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition" data-testid={`button-delete-${product.slug}`}>Hapus</button>
-                  </div>
+            {productLoading ? (
+              <div className="text-center py-12 text-gray-400">Memuat produk...</div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {products.map((product) => (
+                    <div key={product.slug} className="bg-white rounded-lg border p-4 flex items-center gap-4" data-testid={`product-row-${product.slug}`}>
+                      <img
+                        src={product.primary_image || "/images/placeholder.svg"}
+                        alt=""
+                        className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/placeholder.svg"; }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate">{product.name}</h3>
+                        <p className="text-sm text-gray-500">{product.category}</p>
+                        <div className="flex gap-4 mt-1 text-sm"><span className="text-red-600 font-medium">{formatPrice(product.price)}</span><span className="text-gray-400">Stok: {product.stock}</span><span className="text-gray-400">{product.sold_count} terjual</span></div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Link href={`/seller/products/${product.slug}`} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-testid={`button-edit-${product.slug}`}>Edit</Link>
+                        <button onClick={() => handleDelete(product.slug)} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition" data-testid={`button-delete-${product.slug}`}>Hapus</button>
+                      </div>
+                    </div>
+                  ))}
+                  {products.length === 0 && (
+                    <div className="text-center py-12 text-gray-400">{productSearch ? `Tidak ada produk yang cocok dengan "${productSearch}"` : "Belum ada produk"}</div>
+                  )}
                 </div>
-              ))}
-              {products.filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.category || "").toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
-                <div className="text-center py-12 text-gray-400">{productSearch ? `Tidak ada produk yang cocok dengan "${productSearch}"` : "Belum ada produk"}</div>
-              )}
-            </div>
+
+                {productTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <p className="text-sm text-gray-500">
+                      Halaman {productPage} dari {productTotalPages} &nbsp;·&nbsp; {productTotal} produk
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadProducts(productPage - 1, productSearch)}
+                        disabled={productPage <= 1}
+                        className="px-3 py-1.5 rounded-lg border text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        ← Sebelumnya
+                      </button>
+                      <button
+                        onClick={() => loadProducts(productPage + 1, productSearch)}
+                        disabled={productPage >= productTotalPages}
+                        className="px-3 py-1.5 rounded-lg border text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Berikutnya →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
         {tab === "orders" && (
