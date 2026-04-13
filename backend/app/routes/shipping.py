@@ -51,10 +51,44 @@ async def search_areas(input: str = "", request: Request = None, db: Session = D
 FALLBACK_ORIGIN_AREA_ID = "IDNP6IDNC153IDND2256IDZ10110"
 FALLBACK_ORIGIN_POSTAL_CODE = "10110"
 
+KNOWN_COURIERS = [
+    {"code": "jne", "name": "JNE"},
+    {"code": "sicepat", "name": "SiCepat"},
+    {"code": "jnt", "name": "J&T Express"},
+    {"code": "anteraja", "name": "Anteraja"},
+    {"code": "tiki", "name": "TIKI"},
+    {"code": "ninja", "name": "Ninja Xpress"},
+    {"code": "idexpress", "name": "ID Express"},
+    {"code": "pos", "name": "Pos Indonesia"},
+    {"code": "paxel", "name": "Paxel"},
+    {"code": "lion", "name": "Lion Parcel"},
+    {"code": "sap", "name": "SAP Express"},
+    {"code": "rpx", "name": "RPX Holding"},
+    {"code": "borzo", "name": "Borzo"},
+    {"code": "grab", "name": "GrabExpress"},
+    {"code": "gosend", "name": "GoSend"},
+]
+
 
 def _seller_config_path() -> str:
     import os
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json")
+
+
+def _get_allowed_couriers() -> list[str]:
+    """Return list of allowed courier codes from seller_config, or all known if not set."""
+    try:
+        import os
+        path = _seller_config_path()
+        if os.path.exists(path):
+            with open(path) as f:
+                cfg = json.load(f)
+            allowed = cfg.get("allowed_couriers")
+            if isinstance(allowed, list) and allowed:
+                return allowed
+    except Exception:
+        pass
+    return [c["code"] for c in KNOWN_COURIERS]
 
 
 def get_seller_origin() -> dict:
@@ -73,6 +107,44 @@ def get_seller_origin() -> dict:
     return {"area_id": "", "postal_code": ""}
 
 
+@router.get("/couriers")
+async def list_couriers():
+    """Return the master list of supported couriers."""
+    return {"couriers": KNOWN_COURIERS}
+
+
+@router.get("/allowed-couriers")
+async def get_allowed_couriers_endpoint():
+    """Return the seller's currently allowed courier codes."""
+    return {"allowed_couriers": _get_allowed_couriers()}
+
+
+@router.put("/allowed-couriers")
+async def set_allowed_couriers(request: Request, db: Session = Depends(get_db)):
+    """Seller-only: save the list of allowed courier codes."""
+    user = get_current_user(request, db)
+    if not user or user.role != "seller":
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+    body = await request.json()
+    allowed = body.get("allowed_couriers", [])
+    if not isinstance(allowed, list):
+        return JSONResponse({"error": "Format tidak valid"}, status_code=400)
+    valid_codes = {c["code"] for c in KNOWN_COURIERS}
+    allowed = [c for c in allowed if c in valid_codes]
+    if not allowed:
+        return JSONResponse({"error": "Pilih minimal satu kurir"}, status_code=400)
+    import os
+    path = _seller_config_path()
+    cfg = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            cfg = json.load(f)
+    cfg["allowed_couriers"] = allowed
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent=2)
+    return {"success": True, "allowed_couriers": allowed}
+
+
 @router.post("/rates")
 async def get_rates(request: Request, db: Session = Depends(get_db)):
     if not BITESHIP_API_KEY:
@@ -80,7 +152,8 @@ async def get_rates(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     destination_area_id = body.get("destination_area_id", "")
     items = body.get("items", [])
-    couriers = body.get("couriers", DEFAULT_COURIERS)
+    allowed = _get_allowed_couriers()
+    couriers = body.get("couriers") or ",".join(allowed)
 
     if not destination_area_id:
         return JSONResponse({"error": "Area tujuan diperlukan"}, status_code=400)

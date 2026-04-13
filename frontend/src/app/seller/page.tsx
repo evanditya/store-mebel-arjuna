@@ -153,6 +153,10 @@ export default function SellerDashboard() {
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
+  const [allCouriers, setAllCouriers] = useState<{ code: string; name: string }[]>([]);
+  const [allowedCouriers, setAllowedCouriers] = useState<string[]>([]);
+  const [courierSaving, setCourierSaving] = useState(false);
+  const [courierMsg, setCourierMsg] = useState("");
 
   const [banners, setBanners] = useState<Banner[]>([]);
   const [showCropper, setShowCropper] = useState(false);
@@ -248,7 +252,13 @@ export default function SellerDashboard() {
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
     Promise.all([fetch("/api/products").then((r) => r.json()), fetch("/api/orders").then((r) => r.json())]).then(([prodData, orderData]) => { setProducts(prodData.products || []); setOrders(orderData.orders || []); setLoading(false); });
-    fetch("/api/shipping/status").then((r) => r.json()).then((data) => setShippingAvailable(data.available)).catch(() => {});
+    fetch("/api/shipping/status").then((r) => r.json()).then((data) => {
+      setShippingAvailable(data.available);
+      if (data.available) {
+        fetch("/api/shipping/couriers").then((r) => r.json()).then((d) => setAllCouriers(d.couriers || [])).catch(() => {});
+        fetch("/api/shipping/allowed-couriers").then((r) => r.json()).then((d) => setAllowedCouriers(d.allowed_couriers || [])).catch(() => {});
+      }
+    }).catch(() => {});
     fetch("/api/branding").then((r) => r.json()).then((data) => {
       setBrandingForm({
         site_name: data.site_name || "",
@@ -262,6 +272,26 @@ export default function SellerDashboard() {
     }).catch(() => {});
     loadBanners();
   }, [router]);
+
+  const toggleCourier = (code: string) => {
+    setAllowedCouriers((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
+  const saveCouriers = async () => {
+    if (allowedCouriers.length === 0) { setCourierMsg("Pilih minimal satu kurir"); return; }
+    setCourierSaving(true); setCourierMsg("");
+    const res = await fetch("/api/shipping/allowed-couriers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowed_couriers: allowedCouriers }),
+    });
+    const data = await res.json();
+    setCourierMsg(data.success ? "Kurir berhasil disimpan" : data.error || "Gagal menyimpan");
+    setCourierSaving(false);
+    setTimeout(() => setCourierMsg(""), 3000);
+  };
 
   const saveBranding = async () => {
     setBrandingSaving(true);
@@ -670,6 +700,54 @@ export default function SellerDashboard() {
                 Edit Profil & Pengaturan
               </a>
             </div>
+
+            {shippingAvailable && (
+              <div className="bg-white rounded-lg border p-6">
+                <h2 className="font-bold text-lg mb-1">Kurir Aktif</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Pilih kurir yang tersedia untuk pembeli saat checkout. Hanya kurir yang dicentang yang akan ditampilkan.
+                </p>
+                {allCouriers.length === 0 ? (
+                  <p className="text-sm text-gray-400">Memuat daftar kurir...</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+                      {allCouriers.map((c) => {
+                        const checked = allowedCouriers.includes(c.code);
+                        return (
+                          <label
+                            key={c.code}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition select-none ${checked ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-400"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleCourier(c.code)}
+                              className="accent-gray-900 w-4 h-4 flex-shrink-0"
+                            />
+                            <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={saveCouriers}
+                        disabled={courierSaving || allowedCouriers.length === 0}
+                        className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                      >
+                        {courierSaving ? "Menyimpan..." : `Simpan Kurir (${allowedCouriers.length} dipilih)`}
+                      </button>
+                      {courierMsg && (
+                        <span className={`text-sm ${courierMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>
+                          {courierMsg}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
