@@ -157,7 +157,7 @@ export default function SellerDashboard() {
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [excelImporting, setExcelImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ total: number; updated: number; detail?: { produk_diperbarui: number; varian_diperbarui: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ total: number; updated: number; skipped: number; detail?: { produk_diperbarui: number; produk_tidak_berubah: number; varian_diperbarui: number; varian_tidak_berubah: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const productMounted = useRef(false);
 
@@ -477,29 +477,34 @@ export default function SellerDashboard() {
                 </div>
 
                 {/* Stat boxes */}
-                <div className="grid grid-cols-3 divide-x border-b">
-                  <div className="px-4 py-3 text-center">
+                <div className="grid grid-cols-4 divide-x border-b">
+                  <div className="px-3 py-3 text-center">
                     <p className="text-xs text-gray-500 mb-0.5">Total Baris</p>
                     <p className="text-2xl font-bold text-gray-800">{importResult.total}</p>
                   </div>
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Berhasil Diperbarui</p>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Data Diubah</p>
                     <p className="text-2xl font-bold text-green-600">{importResult.updated}</p>
                   </div>
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Gagal / Tidak Ditemukan</p>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Tidak Berubah</p>
+                    <p className="text-2xl font-bold text-gray-400">{importResult.skipped ?? (importResult.total - importResult.updated - importResult.error_count - importResult.not_found_count)}</p>
+                  </div>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Gagal</p>
                     <p className={`text-2xl font-bold ${(importResult.error_count + importResult.not_found_count) > 0 ? "text-red-500" : "text-gray-400"}`}>
                       {importResult.error_count + importResult.not_found_count}
                     </p>
                   </div>
                 </div>
 
-                {/* Breakdown */}
+                {/* Breakdown by sheet */}
                 {importResult.detail && (
-                  <div className="px-4 py-3 border-b bg-gray-50 flex flex-wrap gap-6 text-xs text-gray-600">
-                    <span>📄 <strong>{importResult.detail.produk_diperbarui}</strong> data produk diperbarui (Sheet 1)</span>
-                    <span>🏷️ <strong>{importResult.detail.varian_diperbarui}</strong> data varian diperbarui (Sheet 2)</span>
-                    <span className="text-gray-400">({importResult.total - importResult.updated} baris tidak berubah atau gagal)</span>
+                  <div className="px-4 py-2.5 border-b bg-gray-50 text-xs text-gray-600">
+                    <div className="flex flex-wrap gap-x-8 gap-y-1">
+                      <span>📄 Sheet Produk — <strong className="text-green-700">{importResult.detail.produk_diperbarui} diubah</strong>, <span className="text-gray-400">{importResult.detail.produk_tidak_berubah} tidak berubah</span></span>
+                      <span>🏷️ Sheet Varian — <strong className="text-green-700">{importResult.detail.varian_diperbarui} diubah</strong>, <span className="text-gray-400">{importResult.detail.varian_tidak_berubah} tidak berubah</span></span>
+                    </div>
                   </div>
                 )}
 

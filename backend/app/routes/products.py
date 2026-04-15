@@ -343,7 +343,19 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
         except (ValueError, TypeError):
             return None
 
-    total_prod = updated_prod = total_var = updated_var = 0
+    def _num_eq(old, new):
+        """True if old and new represent the same numeric value (ignores float/int mismatch)."""
+        if old is None and new is None:
+            return True
+        if old is None or new is None:
+            return False
+        try:
+            return round(float(old)) == round(float(new))
+        except (TypeError, ValueError):
+            return False
+
+    total_prod = updated_prod = skipped_prod = 0
+    total_var  = updated_var  = skipped_var  = 0
     not_found: list = []
     errors: list = []
 
@@ -367,21 +379,27 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                 not_found.append(nama)
                 continue
             try:
+                changed = False
+
                 harga = _parse_num(_cell(row, col1, "Harga"))
-                if harga is not None:
-                    product.price = harga
+                if harga is not None and not _num_eq(product.price, harga):
+                    product.price = harga; changed = True
 
                 hc_raw = _cell(row, col1, "Harga Coret")
                 if hc_raw is not None and str(hc_raw).strip() != "":
                     hc = _parse_num(hc_raw)
-                    product.original_price = hc if hc and hc > 0 else None
-                elif hc_raw is not None:
-                    product.original_price = None
+                    new_hc = hc if hc and hc > 0 else None
+                    if not _num_eq(product.original_price, new_hc):
+                        product.original_price = new_hc; changed = True
+                elif hc_raw is not None and str(hc_raw).strip() == "" and product.original_price is not None:
+                    product.original_price = None; changed = True
 
                 stok_raw = _cell(row, col1, "Stok (tanpa varian)")
                 if stok_raw is not None and str(stok_raw).strip() not in ("", "-"):
                     try:
-                        product.stock = int(float(str(stok_raw).strip()))
+                        new_stok = int(float(str(stok_raw).strip()))
+                        if product.stock != new_stok:
+                            product.stock = new_stok; changed = True
                     except (ValueError, TypeError):
                         pass
 
@@ -390,7 +408,9 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                     v = _cell(row, col1, cname)
                     if v is not None and str(v).strip():
                         try:
-                            setattr(product, attr, int(float(str(v).strip())))
+                            new_v = int(float(str(v).strip()))
+                            if getattr(product, attr) != new_v:
+                                setattr(product, attr, new_v); changed = True
                         except (ValueError, TypeError):
                             pass
 
@@ -398,9 +418,14 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                                      ("video_url", "Video Produk")]:
                     v = _cell(row, col1, cname)
                     if v is not None:
-                        setattr(product, attr, str(v).strip() or None)
+                        new_v = str(v).strip() or None
+                        if getattr(product, attr) != new_v:
+                            setattr(product, attr, new_v); changed = True
 
-                updated_prod += 1
+                if changed:
+                    updated_prod += 1
+                else:
+                    skipped_prod += 1
             except Exception as e:
                 errors.append({"row": row_num, "name": nama, "error": str(e)})
 
@@ -428,22 +453,31 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                                    "error": "Nama varian tidak cocok"})
                     continue
                 try:
+                    changed = False
+
                     harga = _parse_num(_cell(row, col2, "Harga"))
-                    if harga is not None:
-                        variant.price = harga
+                    if harga is not None and not _num_eq(variant.price, harga):
+                        variant.price = harga; changed = True
 
                     stok_raw = _cell(row, col2, "Stok")
                     if stok_raw is not None and str(stok_raw).strip():
                         try:
-                            variant.stock = int(float(str(stok_raw).strip()))
+                            new_stok = int(float(str(stok_raw).strip()))
+                            if variant.stock != new_stok:
+                                variant.stock = new_stok; changed = True
                         except (ValueError, TypeError):
                             pass
 
                     tersedia = str(_cell(row, col2, "Tersedia (Ya/Tidak)") or "").strip().lower()
                     if tersedia:
-                        variant.is_available = tersedia not in ("tidak", "no", "false", "0")
+                        new_avail = tersedia not in ("tidak", "no", "false", "0")
+                        if variant.is_available != new_avail:
+                            variant.is_available = new_avail; changed = True
 
-                    updated_var += 1
+                    if changed:
+                        updated_var += 1
+                    else:
+                        skipped_var += 1
                 except Exception as e:
                     errors.append({"row": row_num,
                                    "name": f"{nama} → {nama_varian}",
@@ -459,9 +493,12 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
     return {
         "total": total_prod + total_var,
         "updated": updated_prod + updated_var,
+        "skipped": skipped_prod + skipped_var,
         "detail": {
             "produk_diperbarui": updated_prod,
+            "produk_tidak_berubah": skipped_prod,
             "varian_diperbarui": updated_var,
+            "varian_tidak_berubah": skipped_var,
         },
         "not_found": not_found,
         "not_found_count": len(not_found),
