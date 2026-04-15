@@ -67,6 +67,14 @@ async def create_payment_token(request: Request, db: Session = Depends(get_db)):
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
 
+    # Guard: do not create a new transaction if already paid or cancelled
+    if order.status in ("paid", "cancelled", "completed"):
+        return JSONResponse({"error": f"Pesanan sudah berstatus {order.status}"}, status_code=400)
+
+    # Reuse existing token — prevents creating duplicate Midtrans transactions
+    if order.payment_token:
+        return {"token": order.payment_token}
+
     snap_url = SNAP_PRODUCTION_URL if MIDTRANS_IS_PRODUCTION else SNAP_SANDBOX_URL
     auth_string = base64.b64encode(f"{MIDTRANS_SERVER_KEY}:".encode()).decode()
 

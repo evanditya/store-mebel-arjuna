@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -83,13 +83,14 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [snapReady, setSnapReady] = useState(false);
+  const snapOpenRef = useRef(false);
   const [midtransClientKey, setMidtransClientKey] = useState("");
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
 
   const loadOrders = () => {
-    fetch("/api/orders").then((r) => r.json()).then((data) => { setOrders(data.orders || []); setLoading(false); });
+    return fetch("/api/orders").then((r) => r.json()).then((data) => { setOrders(data.orders || []); setLoading(false); });
   };
 
   useEffect(() => {
@@ -106,22 +107,44 @@ export default function OrdersPage() {
   }, [router]);
 
   const handlePay = async (orderId: string) => {
-    if (!midtransClientKey || !snapReady) return;
+    // Block if Snap popup is already open or another payment is being processed
+    if (!midtransClientKey || !snapReady || snapOpenRef.current || payingOrderId) return;
     setPayingOrderId(orderId);
     try {
-      const tokenRes = await fetch("/api/payment/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: orderId }) });
+      const tokenRes = await fetch("/api/payment/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId }),
+      });
       if (!tokenRes.ok) { setPayingOrderId(null); return; }
-      const { token } = await tokenRes.json();
+      const data = await tokenRes.json();
+      const token = data.token;
+      if (!token) { setPayingOrderId(null); return; }
+
       const syncStatus = async () => { try { await fetch(`/api/payment/status/${orderId}`); } catch {} };
+
+      const onDone = async () => {
+        snapOpenRef.current = false;
+        await syncStatus();
+        await loadOrders();
+        setPayingOrderId(null);
+      };
+
       if (window.snap && token) {
+        snapOpenRef.current = true;
         window.snap.pay(token, {
-          onSuccess: async () => { await syncStatus(); loadOrders(); setPayingOrderId(null); },
-          onPending: async () => { await syncStatus(); loadOrders(); setPayingOrderId(null); },
-          onError: async () => { await syncStatus(); loadOrders(); setPayingOrderId(null); },
-          onClose: async () => { await syncStatus(); loadOrders(); setPayingOrderId(null); },
+          onSuccess: onDone,
+          onPending: onDone,
+          onError: onDone,
+          onClose: onDone,
         });
-      } else { setPayingOrderId(null); }
-    } catch { setPayingOrderId(null); }
+      } else {
+        setPayingOrderId(null);
+      }
+    } catch {
+      snapOpenRef.current = false;
+      setPayingOrderId(null);
+    }
   };
 
   const handleTrack = async (orderId: string) => {
