@@ -319,45 +319,50 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
     except Exception as e:
         return JSONResponse({"error": f"File Excel tidak valid: {e}"}, status_code=400)
 
+    # ── Pre-load ALL products + variants into memory (one query) ────────────
+    all_products = db.query(Product).options(joinedload(Product.variants)).all()
+    prod_by_name = {p.name: p for p in all_products}
+    # variant lookup: (product_id, variant_name) -> variant object
+    var_by_key = {(v.product_id, v.variant_name): v
+                  for p in all_products for v in p.variants}
+
     def _get_col(header_row):
-        return {str(h).strip() if h is not None else "": idx for idx, h in enumerate(header_row)}
+        return {str(h).strip() if h is not None else "": idx
+                for idx, h in enumerate(header_row)}
 
     def _cell(row, col_map, name):
         idx = col_map.get(name)
-        if idx is None:
-            return None
-        return row[idx] if idx < len(row) else None
+        return row[idx] if idx is not None and idx < len(row) else None
 
     def _parse_num(val):
         if val is None:
             return None
-        s = str(val).replace(",", "").replace(".", "").strip() if isinstance(val, str) else str(val)
         try:
-            return float(s)
+            return float(str(val).replace(",", "").replace(".", "").strip()
+                         if isinstance(val, str) else val)
         except (ValueError, TypeError):
             return None
 
-    total_prod = 0
-    updated_prod = 0
-    total_var = 0
-    updated_var = 0
-    not_found = []
-    errors = []
+    total_prod = updated_prod = total_var = updated_var = 0
+    not_found: list = []
+    errors: list = []
 
-    # ── Sheet 1: Product info ────────────────────────────────────────────────
+    # ── Sheet 1: Product info (no DB queries inside loop) ───────────────────
     ws1 = wb.active
     rows1 = list(ws1.iter_rows(values_only=True))
     if rows1:
         col1 = _get_col(rows1[0])
         if "Nama Produk" not in col1:
-            return JSONResponse({"error": "Sheet 'Produk': kolom 'Nama Produk' tidak ditemukan"}, status_code=400)
+            return JSONResponse(
+                {"error": "Sheet 'Produk': kolom 'Nama Produk' tidak ditemukan"},
+                status_code=400)
 
         for row_num, row in enumerate(rows1[1:], start=2):
             nama = str(_cell(row, col1, "Nama Produk") or "").strip()
             if not nama:
                 continue
             total_prod += 1
-            product = db.query(Product).filter(Product.name == nama).first()
+            product = prod_by_name.get(nama)
             if not product:
                 not_found.append(nama)
                 continue
@@ -366,11 +371,11 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                 if harga is not None:
                     product.price = harga
 
-                harga_coret_raw = _cell(row, col1, "Harga Coret")
-                if harga_coret_raw is not None and str(harga_coret_raw).strip() != "":
-                    hc = _parse_num(harga_coret_raw)
+                hc_raw = _cell(row, col1, "Harga Coret")
+                if hc_raw is not None and str(hc_raw).strip() != "":
+                    hc = _parse_num(hc_raw)
                     product.original_price = hc if hc and hc > 0 else None
-                elif harga_coret_raw is not None:
+                elif hc_raw is not None:
                     product.original_price = None
 
                 stok_raw = _cell(row, col1, "Stok (tanpa varian)")
@@ -380,31 +385,30 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                     except (ValueError, TypeError):
                         pass
 
-                for attr, col_name in [("weight", "Berat (gram)"), ("length", "Panjang (cm)"),
-                                        ("width", "Lebar (cm)"), ("height", "Tinggi (cm)")]:
-                    val = _cell(row, col1, col_name)
-                    if val is not None and str(val).strip() != "":
+                for attr, cname in [("weight", "Berat (gram)"), ("length", "Panjang (cm)"),
+                                     ("width", "Lebar (cm)"), ("height", "Tinggi (cm)")]:
+                    v = _cell(row, col1, cname)
+                    if v is not None and str(v).strip():
                         try:
-                            setattr(product, attr, int(float(str(val).strip())))
+                            setattr(product, attr, int(float(str(v).strip())))
                         except (ValueError, TypeError):
                             pass
 
-                for attr, col_name in [("category", "Kategori"), ("description", "Deskripsi"), ("video_url", "Video Produk")]:
-                    val = _cell(row, col1, col_name)
-                    if val is not None:
-                        setattr(product, attr, str(val).strip() or None)
+                for attr, cname in [("category", "Kategori"), ("description", "Deskripsi"),
+                                     ("video_url", "Video Produk")]:
+                    v = _cell(row, col1, cname)
+                    if v is not None:
+                        setattr(product, attr, str(v).strip() or None)
 
-                db.commit()
                 updated_prod += 1
             except Exception as e:
-                db.rollback()
-                errors.append({"sheet": "Produk", "row": row_num, "name": nama, "error": str(e)})
+                errors.append({"row": row_num, "name": nama, "error": str(e)})
 
-    # ── Sheet 2: Variants ────────────────────────────────────────────────────
+    # ── Sheet 2: Variants (no DB queries inside loop) ────────────────────────
     ws2 = wb["Varian"] if "Varian" in wb.sheetnames else None
     if ws2 is not None:
         rows2 = list(ws2.iter_rows(values_only=True))
-        if rows2:
+        if len(rows2) > 1:
             col2 = _get_col(rows2[0])
             for row_num, row in enumerate(rows2[1:], start=2):
                 nama = str(_cell(row, col2, "Nama Produk") or "").strip()
@@ -412,14 +416,16 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                 if not nama or not nama_varian:
                     continue
                 total_var += 1
-                product = db.query(Product).filter(Product.name == nama).first()
+                product = prod_by_name.get(nama)
                 if not product:
                     if nama not in not_found:
                         not_found.append(nama)
                     continue
-                variant = next((v for v in product.variants if v.variant_name == nama_varian), None)
+                variant = var_by_key.get((product.id, nama_varian))
                 if not variant:
-                    errors.append({"sheet": "Varian", "row": row_num, "name": f"{nama} → {nama_varian}", "error": "Nama varian tidak ditemukan"})
+                    errors.append({"row": row_num,
+                                   "name": f"{nama} → {nama_varian}",
+                                   "error": "Nama varian tidak cocok"})
                     continue
                 try:
                     harga = _parse_num(_cell(row, col2, "Harga"))
@@ -427,21 +433,28 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                         variant.price = harga
 
                     stok_raw = _cell(row, col2, "Stok")
-                    if stok_raw is not None and str(stok_raw).strip() != "":
+                    if stok_raw is not None and str(stok_raw).strip():
                         try:
                             variant.stock = int(float(str(stok_raw).strip()))
                         except (ValueError, TypeError):
                             pass
 
-                    tersedia_raw = str(_cell(row, col2, "Tersedia (Ya/Tidak)") or "").strip().lower()
-                    if tersedia_raw:
-                        variant.is_available = tersedia_raw not in ("tidak", "no", "false", "0")
+                    tersedia = str(_cell(row, col2, "Tersedia (Ya/Tidak)") or "").strip().lower()
+                    if tersedia:
+                        variant.is_available = tersedia not in ("tidak", "no", "false", "0")
 
-                    db.commit()
                     updated_var += 1
                 except Exception as e:
-                    db.rollback()
-                    errors.append({"sheet": "Varian", "row": row_num, "name": f"{nama} → {nama_varian}", "error": str(e)})
+                    errors.append({"row": row_num,
+                                   "name": f"{nama} → {nama_varian}",
+                                   "error": str(e)})
+
+    # ── Single commit for everything ─────────────────────────────────────────
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({"error": f"Gagal menyimpan ke database: {e}"}, status_code=500)
 
     return {
         "total": total_prod + total_var,
@@ -452,7 +465,7 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
         },
         "not_found": not_found,
         "not_found_count": len(not_found),
-        "errors": [{"row": e.get("row", "?"), "name": e["name"], "error": e["error"]} for e in errors],
+        "errors": errors,
         "error_count": len(errors),
     }
 
