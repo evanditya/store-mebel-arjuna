@@ -462,34 +462,78 @@ export default function SellerDashboard() {
             </div>
 
             {importResult && (
-              <div className={`mb-4 rounded-lg border p-4 text-sm ${importResult.error_count > 0 || importResult.not_found_count > 0 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold text-gray-800 mb-2">Hasil Import Excel</p>
-                    <div className="flex flex-wrap gap-4 text-sm">
-                      <span className="text-gray-600">Total baris: <strong>{importResult.total}</strong></span>
-                      <span className="text-green-700">Berhasil diperbarui: <strong>{importResult.updated}</strong></span>
-                      {importResult.detail && (
-                        <span className="text-gray-500 text-xs">({importResult.detail.produk_diperbarui} produk · {importResult.detail.varian_diperbarui} varian)</span>
-                      )}
-                      {importResult.not_found_count > 0 && <span className="text-orange-600">Tidak ditemukan: <strong>{importResult.not_found_count}</strong></span>}
-                      {importResult.error_count > 0 && <span className="text-red-600">Error: <strong>{importResult.error_count}</strong></span>}
-                    </div>
-                    {importResult.not_found.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-orange-700 font-medium text-xs mb-1">Nama tidak cocok (dilewati):</p>
-                        <p className="text-xs text-orange-600 break-all">{importResult.not_found.slice(0, 10).join(", ")}{importResult.not_found.length > 10 ? ` ... +${importResult.not_found.length - 10} lainnya` : ""}</p>
-                      </div>
+              <div className="mb-4 rounded-xl border bg-white shadow-sm text-sm overflow-hidden">
+                {/* Header */}
+                <div className={`flex items-center justify-between px-4 py-3 ${importResult.error_count > 0 || importResult.not_found_count > 0 ? "bg-yellow-50 border-b border-yellow-200" : "bg-green-50 border-b border-green-200"}`}>
+                  <div className="flex items-center gap-2">
+                    {importResult.error_count === 0 && importResult.not_found_count === 0 ? (
+                      <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
                     )}
-                    {importResult.errors.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-red-700 font-medium text-xs mb-1">Error per baris:</p>
-                        {importResult.errors.slice(0, 3).map((e) => <p key={e.row} className="text-xs text-red-600">Baris {e.row} ({e.name}): {e.error}</p>)}
-                      </div>
-                    )}
+                    <span className="font-semibold text-gray-800">Laporan Import Excel</span>
                   </div>
-                  <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0 text-lg leading-none">×</button>
+                  <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                 </div>
+
+                {/* Stat boxes */}
+                <div className="grid grid-cols-3 divide-x border-b">
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Total Baris</p>
+                    <p className="text-2xl font-bold text-gray-800">{importResult.total}</p>
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Berhasil Diperbarui</p>
+                    <p className="text-2xl font-bold text-green-600">{importResult.updated}</p>
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Gagal / Tidak Ditemukan</p>
+                    <p className={`text-2xl font-bold ${(importResult.error_count + importResult.not_found_count) > 0 ? "text-red-500" : "text-gray-400"}`}>
+                      {importResult.error_count + importResult.not_found_count}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Breakdown */}
+                {importResult.detail && (
+                  <div className="px-4 py-3 border-b bg-gray-50 flex flex-wrap gap-6 text-xs text-gray-600">
+                    <span>📄 <strong>{importResult.detail.produk_diperbarui}</strong> data produk diperbarui (Sheet 1)</span>
+                    <span>🏷️ <strong>{importResult.detail.varian_diperbarui}</strong> data varian diperbarui (Sheet 2)</span>
+                    <span className="text-gray-400">({importResult.total - importResult.updated} baris tidak berubah atau gagal)</span>
+                  </div>
+                )}
+
+                {/* Not found list */}
+                {importResult.not_found.length > 0 && (
+                  <div className="px-4 py-3 border-b">
+                    <p className="text-xs font-semibold text-orange-700 mb-2">
+                      ⚠️ {importResult.not_found_count} nama produk tidak cocok (dilewati)
+                    </p>
+                    <div className="max-h-28 overflow-y-auto space-y-0.5">
+                      {importResult.not_found.map((name, i) => (
+                        <p key={i} className="text-xs text-orange-600 font-mono bg-orange-50 rounded px-2 py-0.5 truncate">{name}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Error list */}
+                {importResult.errors.length > 0 && (
+                  <div className="px-4 py-3">
+                    <p className="text-xs font-semibold text-red-700 mb-2">
+                      ❌ {importResult.error_count} baris error
+                    </p>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {importResult.errors.map((e, i) => (
+                        <div key={i} className="text-xs bg-red-50 rounded px-2 py-1.5">
+                          <span className="text-red-400 font-mono mr-1">Baris {e.row}</span>
+                          <span className="text-red-700 font-medium">{e.name}</span>
+                          <span className="text-red-500 ml-1">→ {e.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
