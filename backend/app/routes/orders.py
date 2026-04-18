@@ -74,7 +74,10 @@ async def list_orders(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user:
         return JSONResponse({"error": "Login terlebih dahulu"}, status_code=401)
-    if user.role == "seller":
+    # ?mine=1  → always return only the current user's orders (used by buyer "Pesanan Saya" page)
+    # seller without ?mine → return all orders (used by seller dashboard)
+    mine = request.query_params.get("mine", "0")
+    if user.role == "seller" and mine != "1":
         orders = db.query(Order).order_by(Order.created_at.desc()).all()
     else:
         orders = db.query(Order).filter(Order.user_id == user.id).order_by(Order.created_at.desc()).all()

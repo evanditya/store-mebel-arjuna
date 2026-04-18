@@ -90,7 +90,7 @@ export default function OrdersPage() {
   const [trackingLoading, setTrackingLoading] = useState(false);
 
   const loadOrders = () => {
-    return fetch("/api/orders").then((r) => r.json()).then((data) => { setOrders(data.orders || []); setLoading(false); });
+    return fetch("/api/orders?mine=1").then((r) => r.json()).then((data) => { setOrders(data.orders || []); setLoading(false); });
   };
 
   useEffect(() => {
@@ -176,7 +176,7 @@ export default function OrdersPage() {
           <Link href="/" className="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></Link>
           <h1 className="text-lg font-bold">Pesanan Saya</h1>
         </div>
-        <div className="flex overflow-x-auto border-t">
+        <div className="flex overflow-x-auto border-t justify-center">
           {STATUS_TABS.map((tab) => {
             const cnt = tabCounts.find((t) => t.key === tab.key)?.count ?? 0;
             return (
