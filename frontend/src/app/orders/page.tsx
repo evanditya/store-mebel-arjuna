@@ -90,7 +90,19 @@ export default function OrdersPage() {
   const [trackingLoading, setTrackingLoading] = useState(false);
 
   const loadOrders = () => {
-    return fetch("/api/orders?mine=1").then((r) => r.json()).then((data) => { setOrders(data.orders || []); setLoading(false); });
+    return fetch("/api/orders?mine=1").then((r) => r.json()).then((data) => {
+      const list: Order[] = data.orders || [];
+      setOrders(list);
+      setLoading(false);
+      // Silently sync any shipped orders with Biteship so delivered orders
+      // automatically move to "Selesai" without requiring manual action.
+      const shipped = list.filter((o) => o.status === "shipped");
+      if (shipped.length > 0) {
+        Promise.all(shipped.map((o) => fetch(`/api/shipping/track/${o.id}`).catch(() => null)))
+          .then(() => fetch("/api/orders?mine=1").then((r) => r.json()).then((d) => setOrders(d.orders || [])))
+          .catch(() => {});
+      }
+    });
   };
 
   useEffect(() => {

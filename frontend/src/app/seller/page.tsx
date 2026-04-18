@@ -307,7 +307,17 @@ export default function SellerDashboard() {
 
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
-    Promise.all([loadProducts(1, ""), fetch("/api/orders").then((r) => r.json())]).then(([, orderData]: [void, { orders?: Order[] }]) => { setOrders(orderData?.orders || []); setLoading(false); });
+    Promise.all([loadProducts(1, ""), fetch("/api/orders").then((r) => r.json())]).then(([, orderData]: [void, { orders?: Order[] }]) => {
+      const list = orderData?.orders || [];
+      setOrders(list);
+      setLoading(false);
+      const shipped = list.filter((o) => o.status === "shipped");
+      if (shipped.length > 0) {
+        Promise.all(shipped.map((o) => fetch(`/api/shipping/track/${o.id}`).catch(() => null)))
+          .then(() => fetch("/api/orders").then((r) => r.json()).then((d) => setOrders(d.orders || [])))
+          .catch(() => {});
+      }
+    });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => {
       setShippingAvailable(data.available);
       if (data.available) {
