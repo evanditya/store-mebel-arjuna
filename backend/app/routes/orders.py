@@ -100,6 +100,7 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
     courier_service_name = body.get("courier_service_name", "")
     shipping_cost = body.get("shipping_cost", 0)
     shipping_etd = body.get("shipping_etd", "")
+    delivery_type = body.get("delivery_type", "delivery")
 
     cart_items = db.query(CartItem).filter(CartItem.user_id == user.id).all()
     if not cart_items:
@@ -122,11 +123,19 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
             "weight": product.weight or 500,
         })
 
-    # Use the shipping cost the buyer selected directly from the rates page.
-    # Re-querying Biteship here uses different item dimensions and a broken loop,
-    # which causes the stored shipping cost to differ from what the buyer chose.
-    validated_shipping_cost = float(shipping_cost)
-    print(f"[Order] shipping_cost from client: {validated_shipping_cost} ({courier_company} {courier_type})")
+    # For pickup orders, shipping is always free and courier fields are overridden.
+    if delivery_type == "pickup":
+        validated_shipping_cost = 0.0
+        courier_service_name = "Ambil di Toko"
+        courier_company = ""
+        courier_type = ""
+        print(f"[Order] pickup order — shipping_cost = 0")
+    else:
+        # Use the shipping cost the buyer selected directly from the rates page.
+        # Re-querying Biteship here uses different item dimensions and a broken loop,
+        # which causes the stored shipping cost to differ from what the buyer chose.
+        validated_shipping_cost = float(shipping_cost)
+        print(f"[Order] shipping_cost from client: {validated_shipping_cost} ({courier_company} {courier_type})")
 
     total = items_total + validated_shipping_cost
 

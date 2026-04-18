@@ -197,6 +197,9 @@ export default function SellerDashboard() {
     colors: ["", "", ""],
     font: "",
     favicon: "",
+    pickup_enabled: false,
+    pickup_open: "08:00",
+    pickup_close: "17:00",
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
@@ -334,6 +337,9 @@ export default function SellerDashboard() {
         colors: [data.brand_colors?.[0] || "", data.brand_colors?.[1] || "", data.brand_colors?.[2] || ""],
         font: data.font || "",
         favicon: data.favicon || "",
+        pickup_enabled: data.pickup_enabled || false,
+        pickup_open: data.pickup_open_time || "08:00",
+        pickup_close: data.pickup_close_time || "17:00",
       });
     }).catch(() => {});
     loadBanners();
@@ -374,6 +380,9 @@ export default function SellerDashboard() {
           brand_colors: brandingForm.colors,
           font: brandingForm.font,
           favicon: brandingForm.favicon,
+          pickup_enabled: brandingForm.pickup_enabled,
+          pickup_open_time: brandingForm.pickup_open,
+          pickup_close_time: brandingForm.pickup_close,
         }),
       });
       if (res.ok) {
@@ -982,6 +991,64 @@ export default function SellerDashboard() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 Edit Profil & Pengaturan
               </a>
+            </div>
+
+            <div className="bg-white rounded-lg border p-6">
+              <h2 className="font-bold text-lg mb-1">Pengambilan di Toko</h2>
+              <p className="text-sm text-gray-500 mb-4">Aktifkan opsi &quot;Ambil di Toko&quot; saat checkout, dan atur jam operasional pengambilan barang.</p>
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div
+                    onClick={() => setBrandingForm((p) => ({ ...p, pickup_enabled: !p.pickup_enabled }))}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${brandingForm.pickup_enabled ? "bg-gray-900" : "bg-gray-300"}`}
+                  >
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${brandingForm.pickup_enabled ? "translate-x-5" : "translate-x-0"}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-800">
+                    {brandingForm.pickup_enabled ? "Aktif — pembeli bisa memilih ambil di toko" : "Nonaktif — hanya pengiriman kurir"}
+                  </span>
+                </label>
+
+                {brandingForm.pickup_enabled && (
+                  <div className="flex items-center gap-4 mt-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Jam Buka</label>
+                      <input
+                        type="time"
+                        value={brandingForm.pickup_open}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_open: e.target.value }))}
+                        className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                    <span className="text-gray-400 mt-5">—</span>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Jam Tutup</label>
+                      <input
+                        type="time"
+                        value={brandingForm.pickup_close}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_close: e.target.value }))}
+                        className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+                    <div className="mt-5 bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700">
+                      Jam operasional: <strong>{brandingForm.pickup_open} – {brandingForm.pickup_close}</strong>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={saveBranding}
+                    disabled={brandingSaving}
+                    className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                  >
+                    {brandingSaving ? "Menyimpan..." : "Simpan Pengaturan"}
+                  </button>
+                  {brandingMsg && (
+                    <span className={`text-sm ${brandingMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{brandingMsg}</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {shippingAvailable && (

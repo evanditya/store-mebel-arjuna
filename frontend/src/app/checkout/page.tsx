@@ -65,6 +65,10 @@ export default function CheckoutPage() {
   const [loadingRates, setLoadingRates] = useState(false);
   const [ratesError, setRatesError] = useState("");
   const [shippingAvailable, setShippingAvailable] = useState(false);
+  const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
+  const [pickupEnabled, setPickupEnabled] = useState(false);
+  const [pickupOpenTime, setPickupOpenTime] = useState("08:00");
+  const [pickupCloseTime, setPickupCloseTime] = useState("17:00");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -108,6 +112,11 @@ export default function CheckoutPage() {
       }
     });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => setShippingAvailable(data.available)).catch(() => {});
+    fetch("/api/branding").then((r) => r.json()).then((data) => {
+      setPickupEnabled(data.pickup_enabled || false);
+      setPickupOpenTime(data.pickup_open_time || "08:00");
+      setPickupCloseTime(data.pickup_close_time || "17:00");
+    }).catch(() => {});
     fetch("/api/payment/client-key").then((r) => r.json()).then((data) => {
       if (data.client_key) {
         setMidtransClientKey(data.client_key);
@@ -197,34 +206,44 @@ export default function CheckoutPage() {
   const fetchRates = (destAreaId: string, postalCode?: number) => fetchRatesWithItems(destAreaId, postalCode);
 
   const itemsTotal = items.reduce((sum, item) => sum + (item.product?.price || 0) * item.quantity, 0);
-  const shippingCost = selectedRate?.price || 0;
+  const shippingCost = deliveryType === "pickup" ? 0 : (selectedRate?.price || 0);
   const grandTotal = itemsTotal + shippingCost;
 
   const handleCheckout = async () => {
     if (!contactName.trim()) { setError("Masukkan nama penerima"); return; }
     if (!contactPhone.trim()) { setError("Masukkan nomor telepon penerima"); return; }
-    if (!address.trim()) { setError("Masukkan alamat pengiriman"); return; }
-    if (shippingAvailable && !selectedArea) { setError("Pilih area tujuan pengiriman dari daftar yang muncul"); return; }
-    if (shippingAvailable && !selectedRate) { setError("Pilih kurir pengiriman"); return; }
+    if (deliveryType === "delivery") {
+      if (!address.trim()) { setError("Masukkan alamat pengiriman"); return; }
+      if (shippingAvailable && !selectedArea) { setError("Pilih area tujuan pengiriman dari daftar yang muncul"); return; }
+      if (shippingAvailable && !selectedRate) { setError("Pilih kurir pengiriman"); return; }
+    }
     setProcessing(true);
     setError("");
 
     try {
       const orderBody: Record<string, unknown> = {
-        shipping_address: address,
         destination_contact_name: contactName,
         destination_contact_phone: contactPhone,
       };
-      if (selectedArea) {
-        orderBody.destination_area_id = selectedArea.id;
-        orderBody.destination_postal_code = String(selectedArea.postal_code);
-      }
-      if (selectedRate) {
-        orderBody.courier_company = selectedRate.courier_company;
-        orderBody.courier_type = selectedRate.courier_type;
-        orderBody.courier_service_name = `${selectedRate.courier_name} ${selectedRate.service_name}`;
-        orderBody.shipping_cost = selectedRate.price;
-        orderBody.shipping_etd = selectedRate.etd ? `${selectedRate.etd} ${selectedRate.etd_unit}` : "";
+
+      if (deliveryType === "pickup") {
+        orderBody.delivery_type = "pickup";
+        orderBody.shipping_cost = 0;
+        orderBody.courier_service_name = "Ambil di Toko";
+        orderBody.shipping_address = address.trim() || "-";
+      } else {
+        orderBody.shipping_address = address;
+        if (selectedArea) {
+          orderBody.destination_area_id = selectedArea.id;
+          orderBody.destination_postal_code = String(selectedArea.postal_code);
+        }
+        if (selectedRate) {
+          orderBody.courier_company = selectedRate.courier_company;
+          orderBody.courier_type = selectedRate.courier_type;
+          orderBody.courier_service_name = `${selectedRate.courier_name} ${selectedRate.service_name}`;
+          orderBody.shipping_cost = selectedRate.price;
+          orderBody.shipping_etd = selectedRate.etd ? `${selectedRate.etd} ${selectedRate.etd_unit}` : "";
+        }
       }
 
       const orderRes = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(orderBody) });
@@ -278,10 +297,56 @@ export default function CheckoutPage() {
             <input value={contactName} onChange={(e) => setContactName(e.target.value)} className="px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-gray-900 text-sm" placeholder="Nama penerima" data-testid="input-contact-name" />
             <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-gray-900 text-sm" placeholder="No. telepon" data-testid="input-contact-phone" />
           </div>
-          <textarea value={address} onChange={(e) => setAddress(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-gray-900 text-sm" rows={2} placeholder="Alamat lengkap (jalan, RT/RW, kelurahan)" data-testid="input-address" />
+          {deliveryType === "delivery" && (
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-gray-900 text-sm" rows={2} placeholder="Alamat lengkap (jalan, RT/RW, kelurahan)" data-testid="input-address" />
+          )}
         </div>
 
-        {shippingAvailable && (
+        {(shippingAvailable || pickupEnabled) && (
+          <div className="bg-white rounded-lg border p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+              <h2 className="font-bold">Metode Pengiriman</h2>
+            </div>
+            <div className="flex gap-2 mb-4">
+              {shippingAvailable && (
+                <button
+                  onClick={() => setDeliveryType("delivery")}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium border-2 transition ${deliveryType === "delivery" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                  data-testid="btn-delivery-courier"
+                >
+                  Kirim ke Alamat
+                </button>
+              )}
+              {pickupEnabled && (
+                <button
+                  onClick={() => setDeliveryType("pickup")}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium border-2 transition ${deliveryType === "pickup" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                  data-testid="btn-delivery-pickup"
+                >
+                  Ambil di Toko
+                </button>
+              )}
+            </div>
+
+            {deliveryType === "pickup" && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">Ambil di Toko — Gratis</p>
+                    <p className="text-sm text-green-700 mt-1">
+                      Jam operasional pengambilan: <strong>{pickupOpenTime} – {pickupCloseTime}</strong>
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">Barang bisa diambil setelah pesanan selesai diproses dan Anda mendapat konfirmasi.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {deliveryType === "delivery" && shippingAvailable && (
           <div className="bg-white rounded-lg border p-4">
             <div className="flex items-center gap-2 mb-3">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
@@ -387,7 +452,7 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {!shippingAvailable && (
+        {!shippingAvailable && !pickupEnabled && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
             <p className="font-medium mb-1">Pengiriman Belum Dikonfigurasi</p>
             <p>Ongkos kirim akan dihitung manual oleh penjual. Tambahkan <code className="bg-yellow-100 px-1 rounded">BITESHIP_API_KEY</code> di Secrets untuk mengaktifkan kalkulasi ongkir otomatis.</p>
@@ -408,8 +473,9 @@ export default function CheckoutPage() {
           </div>
           <div className="border-t mt-4 pt-3 space-y-1">
             <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span>{formatPrice(itemsTotal)}</span></div>
-            {shippingAvailable && selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-500">Ongkir ({selectedRate.courier_name})</span><span>{formatPrice(shippingCost)}</span></div>}
-            {shippingAvailable && !selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-400 italic">Ongkir</span><span className="text-gray-400 italic text-xs">Pilih kurir terlebih dahulu</span></div>}
+            {deliveryType === "pickup" && <div className="flex justify-between text-sm"><span className="text-gray-500">Pengiriman</span><span className="text-green-600 font-medium">Ambil di Toko (Gratis)</span></div>}
+            {deliveryType === "delivery" && shippingAvailable && selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-500">Ongkir ({selectedRate.courier_name})</span><span>{formatPrice(shippingCost)}</span></div>}
+            {deliveryType === "delivery" && shippingAvailable && !selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-400 italic">Ongkir</span><span className="text-gray-400 italic text-xs">Pilih kurir terlebih dahulu</span></div>}
             <div className="flex justify-between items-center pt-2 border-t">
               <span className="font-medium">Total</span>
               <span className="text-xl font-bold text-red-600" data-testid="text-checkout-total">{formatPrice(grandTotal)}</span>

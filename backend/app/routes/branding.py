@@ -45,6 +45,9 @@ async def get_branding():
         "font": config.get("font", "") or "",
         "favicon": config.get("favicon", "") or "",
         "favicon_version": config.get("favicon_version", "") or "",
+        "pickup_enabled": config.get("pickup_enabled", False),
+        "pickup_open_time": config.get("pickup_open_time", "08:00"),
+        "pickup_close_time": config.get("pickup_close_time", "17:00"),
     }
 
 
@@ -71,6 +74,12 @@ async def update_branding(request: Request, db: Session = Depends(get_db)):
     if "favicon" in body:
         config["favicon"] = body["favicon"]
         config["favicon_version"] = str(int(time.time()))
+    if "pickup_enabled" in body:
+        config["pickup_enabled"] = bool(body["pickup_enabled"])
+    if "pickup_open_time" in body:
+        config["pickup_open_time"] = body["pickup_open_time"]
+    if "pickup_close_time" in body:
+        config["pickup_close_time"] = body["pickup_close_time"]
     _save_config(config)
     return {"success": True}
 

@@ -235,7 +235,12 @@ export default function OrdersPage() {
                     ))}
                   </div>
 
-                  {order.courier_company && (
+                  {order.courier_service_name === "Ambil di Toko" && !order.courier_company ? (
+                    <div className="bg-green-50 rounded-lg p-3 mt-3 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      <span className="text-sm font-medium text-green-800">Ambil di Toko — Gratis</span>
+                    </div>
+                  ) : order.courier_company ? (
                     <div className="bg-gray-50 rounded-lg p-3 mt-3">
                       <div className="flex items-center gap-2 text-sm">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
@@ -247,7 +252,7 @@ export default function OrdersPage() {
                       {order.shipping_etd && <p className="text-xs text-gray-400 mt-0.5">Estimasi: {order.shipping_etd}</p>}
                       {order.tracking_status && <p className="text-xs text-gray-500 mt-0.5">Status: {trackingStatusLabels[order.tracking_status] || order.tracking_status}</p>}
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="border-t mt-3 pt-2 flex justify-between items-center">
                     <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
