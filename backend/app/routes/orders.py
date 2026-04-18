@@ -122,43 +122,11 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
             "weight": product.weight or 500,
         })
 
-    validated_shipping_cost = 0.0
-    if destination_area_id and courier_company and courier_type:
-        from app.config import BITESHIP_API_KEY
-        if BITESHIP_API_KEY:
-            import httpx
-            rate_items = [{"name": d["product_name"][:50], "value": int(d["price"]), "weight": d["weight"], "quantity": d["quantity"]} for d in order_items_data]
-            try:
-                rate_payload = {"couriers": courier_company, "destination_area_id": destination_area_id, "items": rate_items}
-                from app.routes.shipping import get_seller_origin
-                origin = get_seller_origin()
-                if origin.get("area_id"):
-                    rate_payload["origin_area_id"] = origin["area_id"]
-                if origin.get("postal_code"):
-                    rate_payload["origin_postal_code"] = int(origin["postal_code"])
-                async with httpx.AsyncClient(timeout=10) as client:
-                    resp = await client.post("https://api.biteship.com/v1/rates/couriers", json=rate_payload, headers={"Authorization": f"Bearer {BITESHIP_API_KEY}", "Content-Type": "application/json"})
-                if resp.status_code == 200:
-                    pricing = resp.json().get("pricing", [])
-                    for p in pricing:
-                        nested_rates = p.get("rates")
-                        if nested_rates and isinstance(nested_rates, list):
-                            for rate in nested_rates:
-                                if rate.get("type") == courier_type:
-                                    validated_shipping_cost = float(rate.get("price", 0))
-                                    break
-                        else:
-                            if p.get("type", p.get("courier_service_code", "")) == courier_type and p.get("price") is not None:
-                                validated_shipping_cost = float(p.get("price", 0))
-                                break
-                if validated_shipping_cost == 0:
-                    validated_shipping_cost = float(shipping_cost)
-            except Exception:
-                validated_shipping_cost = float(shipping_cost)
-        else:
-            validated_shipping_cost = float(shipping_cost)
-    else:
-        validated_shipping_cost = float(shipping_cost)
+    # Use the shipping cost the buyer selected directly from the rates page.
+    # Re-querying Biteship here uses different item dimensions and a broken loop,
+    # which causes the stored shipping cost to differ from what the buyer chose.
+    validated_shipping_cost = float(shipping_cost)
+    print(f"[Order] shipping_cost from client: {validated_shipping_cost} ({courier_company} {courier_type})")
 
     total = items_total + validated_shipping_cost
 
