@@ -203,6 +203,8 @@ export default function SellerDashboard() {
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
+  const [pickupSaving, setPickupSaving] = useState(false);
+  const [pickupMsg, setPickupMsg] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
@@ -395,6 +397,31 @@ export default function SellerDashboard() {
     }
     setBrandingSaving(false);
     setTimeout(() => setBrandingMsg(""), 3000);
+  };
+
+  const savePickup = async () => {
+    setPickupSaving(true);
+    setPickupMsg("");
+    try {
+      const res = await fetch("/api/branding", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickup_enabled: brandingForm.pickup_enabled,
+          pickup_open_time: brandingForm.pickup_open,
+          pickup_close_time: brandingForm.pickup_close,
+        }),
+      });
+      if (res.ok) {
+        setPickupMsg("Pengaturan berhasil disimpan!");
+      } else {
+        setPickupMsg("Gagal menyimpan.");
+      }
+    } catch {
+      setPickupMsg("Terjadi kesalahan.");
+    }
+    setPickupSaving(false);
+    setTimeout(() => setPickupMsg(""), 3000);
   };
 
   const uploadImage = async (file: File, type: "logo" | "banner" | "favicon") => {
@@ -988,6 +1015,7 @@ export default function SellerDashboard() {
 
                 <div className="flex items-center gap-3 pt-2">
                   <button
+                    type="button"
                     onClick={saveBranding}
                     disabled={brandingSaving}
                     className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
@@ -1064,14 +1092,15 @@ export default function SellerDashboard() {
 
                 <div className="flex items-center gap-3 pt-1">
                   <button
-                    onClick={saveBranding}
-                    disabled={brandingSaving}
+                    type="button"
+                    onClick={savePickup}
+                    disabled={pickupSaving}
                     className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
                   >
-                    {brandingSaving ? "Menyimpan..." : "Simpan Pengaturan"}
+                    {pickupSaving ? "Menyimpan..." : "Simpan Pengaturan"}
                   </button>
-                  {brandingMsg && (
-                    <span className={`text-sm ${brandingMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{brandingMsg}</span>
+                  {pickupMsg && (
+                    <span className={`text-sm ${pickupMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{pickupMsg}</span>
                   )}
                 </div>
               </div>
