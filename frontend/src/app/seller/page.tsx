@@ -192,6 +192,19 @@ export default function SellerDashboard() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
+  // Dynamically load the selected Google Font so the preview works in all browsers (including Safari)
+  useEffect(() => {
+    const font = brandingForm.font;
+    if (!font) return;
+    const id = `gfont-preview-${font.replace(/\s+/g, "-")}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+  }, [brandingForm.font]);
+
   const loadProducts = async (page: number, search: string) => {
     setProductLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: "20" });
