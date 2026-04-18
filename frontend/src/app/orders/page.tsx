@@ -250,7 +250,7 @@ export default function OrdersPage() {
 
                   {hasShipping && (
                     <button onClick={() => handleTrack(order.id)} className="mt-2 w-full border border-gray-200 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition text-gray-700" data-testid={`button-track-${order.id}`}>
-                      {isTrackingOpen ? "Tutup Tracking" : "Lacak Pengiriman"}
+                      {isTrackingOpen ? "Tutup Info" : "Info Pengiriman"}
                     </button>
                   )}
 

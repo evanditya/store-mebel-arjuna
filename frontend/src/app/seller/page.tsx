@@ -38,6 +38,18 @@ interface Order {
   items: Array<{ product_name: string; quantity: number; price: number }>;
 }
 
+interface TrackingHistory { note: string; updated_at: string; status: string; }
+interface TrackingData {
+  order_id: string; status: string; waybill_id: string; tracking_url: string;
+  courier_company: string; history: TrackingHistory[];
+}
+
+const trackingStatusLabels: Record<string, string> = {
+  confirmed: "Dikonfirmasi", allocated: "Dialokasikan", picking_up: "Sedang Dijemput",
+  picked: "Sudah Diambil", dropping_off: "Dalam Pengiriman", delivered: "Terkirim",
+  on_hold: "Ditahan", rejected: "Ditolak", returned: "Dikembalikan",
+};
+
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
@@ -155,6 +167,9 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
+  const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [excelImporting, setExcelImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ total: number; updated: number; skipped: number; detail?: { produk_diperbarui: number; produk_tidak_berubah: number; varian_diperbarui: number; varian_tidak_berubah: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
@@ -429,6 +444,18 @@ export default function SellerDashboard() {
     window.open(`/api/shipping/label/${orderId}`, "_blank");
   };
 
+  const handleTrack = async (orderId: string) => {
+    if (trackingOrderId === orderId) { setTrackingOrderId(null); setTrackingData(null); return; }
+    setTrackingOrderId(orderId);
+    setTrackingLoading(true);
+    try {
+      const res = await fetch(`/api/shipping/track/${orderId}`);
+      const data = await res.json();
+      setTrackingData(data);
+    } catch { setTrackingData(null); }
+    setTrackingLoading(false);
+  };
+
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400">Memuat...</div></div>;
 
   const totalRevenue = orders.filter((o) => o.status === "paid" || o.status === "completed" || o.status === "shipped").reduce((s, o) => s + o.total, 0);
@@ -664,9 +691,52 @@ export default function SellerDashboard() {
                         Cetak Label
                       </button>
                     )}
+                    {(order.waybill_id || order.biteship_order_id) && (
+                      <button onClick={() => handleTrack(order.id)} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition" data-testid={`button-track-${order.id}`}>
+                        {trackingOrderId === order.id ? "Tutup Info" : "Info Pengiriman"}
+                      </button>
+                    )}
                     <span className="font-bold">{formatPrice(order.total)}</span>
                   </div>
                 </div>
+
+                {trackingOrderId === order.id && (
+                  <div className="mt-3 bg-gray-50 rounded-lg p-4">
+                    {trackingLoading ? (
+                      <p className="text-sm text-gray-400 text-center">Memuat info pengiriman...</p>
+                    ) : trackingData ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium">Status: {trackingStatusLabels[trackingData.status] || trackingData.status}</span>
+                          {trackingData.tracking_url && (
+                            <a href={trackingData.tracking_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">Buka di web kurir</a>
+                          )}
+                        </div>
+                        {trackingData.waybill_id && <p className="text-xs font-mono text-gray-600 mb-3">Resi: {trackingData.waybill_id}</p>}
+                        {trackingData.history && trackingData.history.length > 0 ? (
+                          <div className="space-y-3">
+                            {[...trackingData.history].sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()).map((h, idx) => (
+                              <div key={idx} className="flex gap-3 text-sm">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-2.5 h-2.5 rounded-full ${idx === 0 ? "bg-blue-600" : "bg-gray-300"}`} />
+                                  {idx < trackingData.history.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1" />}
+                                </div>
+                                <div className="pb-3">
+                                  <p className="text-gray-800">{h.note || trackingStatusLabels[h.status] || h.status}</p>
+                                  {h.updated_at && <p className="text-xs text-gray-400 mt-0.5">{new Date(h.updated_at).toLocaleString("id-ID")}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400">Belum ada riwayat tracking</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 text-center">Gagal memuat info pengiriman</p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {orders.length === 0 && <div className="text-center py-12 text-gray-400">Belum ada pesanan</div>}
