@@ -403,19 +403,34 @@ async def create_shipment(order_id: str, request: Request, db: Session = Depends
         order.tracking_url = courier_data.get("link", "")
         order.status = "shipped"
         order.updated_at = datetime.utcnow()
-        db.commit()
+
+        # Snapshot BEFORE commit — db.commit() expires all ORM attributes,
+        # so the daemon thread must never access a closed session.
+        buyer_snap = None
+        order_snap = None
+        seller_name = "Toko Online"
         if buyer:
             try:
-                from app.email import send_order_shipped_email
+                from app.email import snapshot_order, snapshot_user
                 config_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
-                seller_name = "Toko Online"
                 try:
                     with open(config_path) as _f:
                         _cfg = json.load(_f)
                         seller_name = _cfg.get("site_name") or _cfg.get("seller_name") or seller_name
                 except Exception:
                     pass
-                threading.Thread(target=send_order_shipped_email, args=(order, buyer, seller_name), daemon=True).start()
+                order_snap = snapshot_order(order)   # order.items already loaded above
+                buyer_snap = snapshot_user(buyer)
+            except Exception as _e:
+                print(f"[Email] snapshot error: {_e}")
+
+        db.commit()
+
+        if buyer_snap and order_snap:
+            try:
+                from app.email import send_order_shipped_email
+                threading.Thread(target=send_order_shipped_email, args=(order_snap, buyer_snap, seller_name), daemon=True).start()
+                print(f"[Email] shipped email queued for {buyer_snap.email}")
             except Exception as _e:
                 print(f"[Email] shipped email error: {_e}")
         return {

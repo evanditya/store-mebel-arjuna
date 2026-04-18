@@ -84,6 +84,67 @@ def _format_idr(amount: float) -> str:
     return f"Rp {int(amount):,}".replace(",", ".")
 
 
+# ── Session-safe snapshots ─────────────────────────────────────────────────
+# SQLAlchemy expires all ORM attributes on db.commit(). Snapshots convert
+# the objects to plain Python so daemon threads never touch a closed session.
+
+import types as _types
+
+
+def snapshot_item(item) -> object:
+    return _types.SimpleNamespace(
+        product_name=item.product_name or "",
+        variant_name=item.variant_name or "",
+        price=float(item.price or 0),
+        quantity=int(item.quantity or 1),
+        weight=int(item.weight or 500),
+    )
+
+
+def snapshot_order(order, items=None) -> object:
+    """
+    Snapshot an ORM Order into a plain object.
+    Pass `items` explicitly when the relationship is not yet loaded
+    (e.g. right after create_order where items are built from raw dicts).
+    """
+    loaded_items = items if items is not None else list(order.items)
+    return _types.SimpleNamespace(
+        id=order.id,
+        total=float(order.total or 0),
+        status=order.status or "",
+        shipping_address=order.shipping_address or "",
+        destination_contact_name=order.destination_contact_name or "",
+        destination_contact_phone=order.destination_contact_phone or "",
+        courier_company=order.courier_company or "",
+        courier_service_name=order.courier_service_name or "",
+        shipping_cost=float(order.shipping_cost or 0),
+        shipping_etd=order.shipping_etd or "",
+        waybill_id=order.waybill_id or "",
+        tracking_url=order.tracking_url or "",
+        items=[snapshot_item(i) for i in loaded_items],
+    )
+
+
+def snapshot_user(user) -> object:
+    return _types.SimpleNamespace(
+        name=user.name or "",
+        email=user.email or "",
+        phone=getattr(user, "phone", "") or "",
+    )
+
+
+# ── Item dict snapshot (for raw dicts from order_items_data) ──────────────
+
+def snapshot_item_from_dict(d: dict) -> object:
+    return _types.SimpleNamespace(
+        product_name=d.get("product_name", ""),
+        variant_name=d.get("variant_name", "") or "",
+        price=float(d.get("price", 0)),
+        quantity=int(d.get("quantity", 1)),
+        weight=int(d.get("weight", 500)),
+    )
+
+
 def _items_table(items: list) -> str:
     rows = ""
     for item in items:

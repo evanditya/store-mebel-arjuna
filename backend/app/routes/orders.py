@@ -180,14 +180,28 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
     for oi_data in order_items_data:
         db.add(OrderItem(id=gen_id(), order_id=order.id, **oi_data))
     db.query(CartItem).filter(CartItem.user_id == user.id).delete()
+
+    # Snapshot BEFORE commit — items are available from order_items_data,
+    # and db.commit() would expire all ORM attributes making them inaccessible in threads.
+    try:
+        from app.email import snapshot_order, snapshot_user, snapshot_item_from_dict, send_order_pending_email
+        seller_name = _get_seller_name()
+        item_snaps = [snapshot_item_from_dict(d) for d in order_items_data]
+        order_snap = snapshot_order(order, items=item_snaps)
+        user_snap = snapshot_user(user)
+    except Exception as _e:
+        print(f"[Email] snapshot error: {_e}")
+        order_snap = user_snap = None
+
     db.commit()
     db.refresh(order)
-    try:
-        from app.email import send_order_pending_email
-        seller_name = _get_seller_name()
-        _send_email_bg(send_order_pending_email, order, user, seller_name)
-    except Exception:
-        pass
+
+    if order_snap and user_snap:
+        try:
+            _send_email_bg(send_order_pending_email, order_snap, user_snap, seller_name)
+        except Exception:
+            pass
+
     return {"order": order_to_dict(order)}
 
 
@@ -205,15 +219,29 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
     prev_status = order.status
     order.status = status
     order.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(order)
+
+    # Snapshot BEFORE commit for completed email
+    order_snap = buyer_snap = completed_seller_name = None
     if status == "completed" and prev_status != "completed":
         try:
             buyer = db.query(User).filter(User.id == order.user_id).first()
             if buyer:
-                from app.email import send_order_completed_email
-                seller_name = _get_seller_name()
-                _send_email_bg(send_order_completed_email, order, buyer, seller_name)
+                from app.email import snapshot_order, snapshot_user
+                _ = list(order.items)  # force-load items while session is open
+                order_snap = snapshot_order(order)
+                buyer_snap = snapshot_user(buyer)
+                completed_seller_name = _get_seller_name()
+        except Exception as _e:
+            print(f"[Email] snapshot error (completed): {_e}")
+
+    db.commit()
+    db.refresh(order)
+
+    if order_snap and buyer_snap:
+        try:
+            from app.email import send_order_completed_email
+            _send_email_bg(send_order_completed_email, order_snap, buyer_snap, completed_seller_name)
         except Exception:
             pass
+
     return {"order": order_to_dict(order)}

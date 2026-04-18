@@ -28,10 +28,18 @@ def _get_seller_name() -> str:
 def _maybe_send_paid_email(order, db: Session):
     try:
         buyer = db.query(User).filter(User.id == order.user_id).first()
-        if buyer:
-            from app.email import send_order_paid_email
-            seller_name = _get_seller_name()
-            threading.Thread(target=send_order_paid_email, args=(order, buyer, seller_name), daemon=True).start()
+        if not buyer:
+            return
+        from app.email import snapshot_order, snapshot_user, send_order_paid_email
+        # Force-load items while the session is still open, then snapshot to plain objects.
+        # db.commit() (called before this) expires all ORM attributes, so the daemon thread
+        # must never touch the SQLAlchemy session.
+        _ = list(order.items)
+        order_snap = snapshot_order(order)
+        buyer_snap = snapshot_user(buyer)
+        seller_name = _get_seller_name()
+        threading.Thread(target=send_order_paid_email, args=(order_snap, buyer_snap, seller_name), daemon=True).start()
+        print(f"[Email] paid email queued for {buyer_snap.email}")
     except Exception as e:
         print(f"[Email] paid email error: {e}")
 
