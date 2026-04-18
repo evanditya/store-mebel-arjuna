@@ -75,6 +75,24 @@ def _seller_config_path() -> str:
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json")
 
 
+def _get_seller_name() -> str:
+    try:
+        with open(_seller_config_path()) as f:
+            d = json.load(f)
+            return d.get("site_name") or d.get("seller_name") or "Toko Online"
+    except Exception:
+        return "Toko Online"
+
+
+def _send_email_bg(fn, *args):
+    def target():
+        try:
+            fn(*args)
+        except Exception as e:
+            print(f"[Email bg error] {e}")
+    threading.Thread(target=target, daemon=True).start()
+
+
 def _get_allowed_couriers() -> list[str]:
     """Return list of allowed courier codes from seller_config, or all known if not set."""
     try:
@@ -478,13 +496,39 @@ async def track_shipment(order_id: str, request: Request, db: Session = Depends(
     if resp.status_code == 200:
         data = resp.json()
         courier = data.get("courier", {})
+        prev_status = order.status
         order.tracking_status = data.get("status", order.tracking_status)
         order.waybill_id = courier.get("waybill_id", order.waybill_id)
         order.tracking_url = courier.get("link", order.tracking_url)
-        if data.get("status") in ("delivered", "completed"):
+        becoming_completed = data.get("status") in ("delivered", "completed") and prev_status != "completed"
+        if becoming_completed:
             order.status = "completed"
         order.updated_at = datetime.utcnow()
+
+        # Snapshot buyer + order BEFORE commit — commit expires all ORM attributes.
+        order_snap = buyer_snap = completed_seller_name = None
+        if becoming_completed:
+            try:
+                buyer = db.query(User).filter(User.id == order.user_id).first()
+                if buyer:
+                    from app.email import snapshot_order, snapshot_user
+                    _ = list(order.items)  # force-load items while session is open
+                    order_snap = snapshot_order(order)
+                    buyer_snap = snapshot_user(buyer)
+                    completed_seller_name = _get_seller_name()
+            except Exception as _e:
+                print(f"[Email] snapshot error (track/completed): {_e}")
+
         db.commit()
+
+        if order_snap and buyer_snap:
+            try:
+                from app.email import send_order_completed_email
+                _send_email_bg(send_order_completed_email, order_snap, buyer_snap, completed_seller_name)
+                print(f"[Email] queued completed email for order {order.id}")
+            except Exception as _e:
+                print(f"[Email] failed to queue completed email: {_e}")
+
         history = courier.get("history", [])
         history.sort(key=lambda h: h.get("updated_at", ""), reverse=True)
         return {
