@@ -197,9 +197,10 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
     order.status = status
     order.updated_at = datetime.utcnow()
 
-    # Snapshot BEFORE commit for completed email
-    order_snap = buyer_snap = completed_seller_name = None
-    if status == "completed" and prev_status != "completed":
+    # Snapshot BEFORE commit for status-change emails
+    order_snap = buyer_snap = snap_seller_name = snap_email_fn = None
+    trigger_statuses = {"completed", "ready_pickup"}
+    if status in trigger_statuses and prev_status != status:
         try:
             buyer = db.query(User).filter(User.id == order.user_id).first()
             if buyer:
@@ -207,17 +208,22 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
                 _ = list(order.items)  # force-load items while session is open
                 order_snap = snapshot_order(order)
                 buyer_snap = snapshot_user(buyer)
-                completed_seller_name = _get_seller_name()
+                snap_seller_name = _get_seller_name()
+                if status == "completed":
+                    from app.email import send_order_completed_email
+                    snap_email_fn = send_order_completed_email
+                elif status == "ready_pickup":
+                    from app.email import send_order_ready_pickup_email
+                    snap_email_fn = send_order_ready_pickup_email
         except Exception as _e:
-            print(f"[Email] snapshot error (completed): {_e}")
+            print(f"[Email] snapshot error ({status}): {_e}")
 
     db.commit()
     db.refresh(order)
 
-    if order_snap and buyer_snap:
+    if order_snap and buyer_snap and snap_email_fn:
         try:
-            from app.email import send_order_completed_email
-            _send_email_bg(send_order_completed_email, order_snap, buyer_snap, completed_seller_name)
+            _send_email_bg(snap_email_fn, order_snap, buyer_snap, snap_seller_name)
         except Exception:
             pass
 

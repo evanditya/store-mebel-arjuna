@@ -293,6 +293,33 @@ def send_order_shipped_email(order, user, seller_name: str = "Toko Online") -> b
     return _send_email(user.email, subject, html)
 
 
+def send_order_ready_pickup_email(order, user, seller_name: str = "Toko Online") -> bool:
+    subject = f"Pesanan #{order.id[:8].upper()} – Siap Diambil di Toko | {seller_name}"
+    items_table = _items_table(order.items)
+    content = f"""
+    <div class="section">
+      <p>Halo <strong>{user.name}</strong>,</p>
+      <p>Pesananmu sudah <strong>siap diambil</strong> di toko kami. Silakan datang ke toko untuk mengambil barangmu ya!</p>
+      <span class="badge badge-green">Siap Diambil</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Ringkasan Pesanan</div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:10px">Kode Pesanan: <strong>#{order.id[:8].upper()}</strong></p>
+      {items_table}
+      <div style="margin-top:12px">
+        <div class="info-row total-row"><span>Total</span><span>{_format_idr(order.total)}</span></div>
+      </div>
+    </div>
+
+    <div class="note-box" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534">
+      🏪 Tunjukkan kode pesanan ini saat mengambil barang di toko.
+    </div>
+    """
+    html = _base_template(content, seller_name)
+    return _send_email(user.email, subject, html)
+
+
 def send_order_completed_email(order, user, seller_name: str = "Toko Online") -> bool:
     subject = f"Pesanan #{order.id[:8].upper()} – Barang Telah Diterima | {seller_name}"
     items_table = _items_table(order.items)

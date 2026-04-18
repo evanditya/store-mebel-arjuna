@@ -677,7 +677,7 @@ export default function SellerDashboard() {
                     {order.tracking_status && <ShippingBadge status={order.tracking_status} />}
                   </div>
                   <select value={order.status} onChange={(e) => handleStatusChange(order.id, e.target.value)} className="text-sm border rounded-lg px-2 py-1" data-testid={`select-status-${order.id}`}>
-                    <option value="pending">Menunggu</option><option value="paid">Dibayar</option><option value="processing">Diproses</option><option value="shipped">Dikirim</option><option value="completed">Selesai</option><option value="cancelled">Dibatalkan</option>
+                    <option value="pending">Menunggu</option><option value="paid">Dibayar</option><option value="processing">Diproses</option><option value="ready_pickup">Siap Diambil</option><option value="shipped">Dikirim</option><option value="completed">Selesai</option><option value="cancelled">Dibatalkan</option>
                   </select>
                 </div>
                 {order.destination_contact_name && <p className="text-sm text-gray-600 mb-1">Penerima: {order.destination_contact_name}</p>}
@@ -705,6 +705,16 @@ export default function SellerDashboard() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">{new Date(order.created_at).toLocaleDateString("id-ID")}</span>
                   <div className="flex items-center gap-2">
+                    {order.courier_service_name === "Ambil di Toko" && (order.status === "paid" || order.status === "processing") && (
+                      <button onClick={() => handleStatusChange(order.id, "ready_pickup")} className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition" data-testid={`button-ready-pickup-${order.id}`}>
+                        Siap Diambil
+                      </button>
+                    )}
+                    {order.courier_service_name === "Ambil di Toko" && order.status === "ready_pickup" && (
+                      <button onClick={() => handleStatusChange(order.id, "completed")} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-medium hover:bg-gray-700 transition" data-testid={`button-complete-pickup-${order.id}`}>
+                        Tandai Selesai
+                      </button>
+                    )}
                     {order.courier_service_name !== "Ambil di Toko" && (order.status === "paid" || order.status === "processing") && !order.biteship_order_id && (
                       <button onClick={() => handleCreateShipment(order.id)} disabled={shippingLoading === order.id} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition disabled:opacity-50" data-testid={`button-ship-${order.id}`}>
                         {shippingLoading === order.id ? "Memproses..." : "Kirim Paket"}
