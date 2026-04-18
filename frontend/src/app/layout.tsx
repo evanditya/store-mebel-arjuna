@@ -1,19 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-
-function getFaviconMimeType(url: string): string {
-  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
-  const map: Record<string, string> = {
-    ico: "image/x-icon",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    svg: "image/svg+xml",
-    webp: "image/webp",
-    gif: "image/gif",
-  };
-  return map[ext] ?? "image/png";
-}
+import FaviconUpdater from "@/components/FaviconUpdater";
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
@@ -25,17 +12,24 @@ export async function generateMetadata(): Promise<Metadata> {
       const name = data.site_name || data.seller_name || "Toko Online";
       const favicon: string = data.favicon || "";
       const version: string = data.favicon_version || String(Date.now());
-      const faviconHref = favicon ? `${favicon}?v=${version}` : "";
-      const mimeType = favicon ? getFaviconMimeType(favicon) : "image/png";
+
+      // Always point to the proxy route so Safari gets proper no-cache headers.
+      // The ?v= param forces browsers to treat it as a new resource when version changes.
+      const faviconHref = favicon ? `/api/favicon?v=${version}` : "";
 
       return {
         title: name,
         description: `${name} - Toko Online`,
         icons: faviconHref
           ? {
-              icon: [{ url: faviconHref, type: mimeType }],
-              apple: [{ url: faviconHref, type: mimeType }],
+              icon: [
+                { url: faviconHref, type: "image/png" },
+              ],
+              apple: [
+                { url: faviconHref, type: "image/png", sizes: "180x180" },
+              ],
               other: [
+                { rel: "shortcut icon", url: faviconHref },
                 { rel: "apple-touch-icon-precomposed", url: faviconHref },
               ],
             }
@@ -52,7 +46,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        <FaviconUpdater />
+        {children}
+      </body>
     </html>
   );
 }
