@@ -684,7 +684,12 @@ export default function SellerDashboard() {
                 {order.shipping_address && <p className="text-xs text-gray-400 mb-2 truncate">Alamat: {order.shipping_address}</p>}
                 <div className="space-y-1 mb-2">{order.items.map((item, i) => (<p key={i} className="text-sm">{item.product_name} x{item.quantity} - {formatPrice(item.price * item.quantity)}</p>))}</div>
 
-                {order.courier_company && (
+                {order.courier_service_name === "Ambil di Toko" && !order.courier_company ? (
+                  <div className="bg-green-50 rounded-lg p-3 mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    <span className="text-sm font-medium text-green-800">Ambil di Toko — Pembeli akan mengambil sendiri</span>
+                  </div>
+                ) : order.courier_company ? (
                   <div className="bg-gray-50 rounded-lg p-3 mb-2">
                     <div className="flex items-center gap-2 text-sm">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
@@ -695,22 +700,22 @@ export default function SellerDashboard() {
                     {order.waybill_id && <p className="text-xs font-mono mt-1 text-gray-600">Resi: {order.waybill_id}</p>}
                     {order.shipping_etd && <p className="text-xs text-gray-400 mt-0.5">ETD: {order.shipping_etd}</p>}
                   </div>
-                )}
+                ) : null}
 
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">{new Date(order.created_at).toLocaleDateString("id-ID")}</span>
                   <div className="flex items-center gap-2">
-                    {(order.status === "paid" || order.status === "processing") && !order.biteship_order_id && (
+                    {order.courier_service_name !== "Ambil di Toko" && (order.status === "paid" || order.status === "processing") && !order.biteship_order_id && (
                       <button onClick={() => handleCreateShipment(order.id)} disabled={shippingLoading === order.id} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition disabled:opacity-50" data-testid={`button-ship-${order.id}`}>
                         {shippingLoading === order.id ? "Memproses..." : "Kirim Paket"}
                       </button>
                     )}
-                    {(order.status === "shipped" || order.biteship_order_id) && (
+                    {order.courier_service_name !== "Ambil di Toko" && (order.status === "shipped" || order.biteship_order_id) && (
                       <button onClick={() => handlePrintLabel(order.id)} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition" data-testid={`button-label-${order.id}`}>
                         Cetak Label
                       </button>
                     )}
-                    {(order.waybill_id || order.biteship_order_id) && (
+                    {order.courier_service_name !== "Ambil di Toko" && (order.waybill_id || order.biteship_order_id) && (
                       <button onClick={() => handleTrack(order.id)} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition" data-testid={`button-track-${order.id}`}>
                         {trackingOrderId === order.id ? "Tutup Info" : "Info Pengiriman"}
                       </button>

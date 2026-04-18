@@ -364,6 +364,8 @@ async def create_shipment(order_id: str, request: Request, db: Session = Depends
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
     if order.biteship_order_id:
         return JSONResponse({"error": "Pengiriman sudah dibuat", "biteship_order_id": order.biteship_order_id}, status_code=400)
+    if order.courier_service_name == "Ambil di Toko":
+        return JSONResponse({"error": "Pesanan ini adalah ambil di toko, tidak perlu membuat pengiriman kurir"}, status_code=400)
     if order.status not in ("paid", "processing"):
         return JSONResponse({"error": "Pesanan belum dibayar"}, status_code=400)
 
