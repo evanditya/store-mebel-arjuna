@@ -15,6 +15,7 @@ interface Variant {
   variant_type: string;
   variant_name: string;
   price: number | null;
+  original_price: number | null;
   price_modifier: number;
   stock: number;
   is_available: boolean;
