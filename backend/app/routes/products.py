@@ -14,7 +14,7 @@ import io
 router = APIRouter(prefix="/api")
 
 EXCEL_COLUMNS = [
-    "Nama Produk", "Harga", "Harga Coret", "Stok",
+    "Nama Produk", "Harga", "Harga Diskon", "Stok",
     "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
     "Kategori", "Deskripsi", "Video Produk", "Varian Produk",
 ]
@@ -262,7 +262,7 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
     # ── Sheet 1: Product info ────────────────────────────────────────────────
     ws1 = wb.active
     ws1.title = "Produk"
-    prod_cols = ["Nama Produk", "Harga", "Harga Coret", "Stok (tanpa varian)",
+    prod_cols = ["Nama Produk", "Harga", "Harga Diskon", "Stok (tanpa varian)",
                  "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
                  "Kategori", "Deskripsi", "Video Produk"]
     prod_widths = [42, 16, 16, 18, 13, 13, 13, 13, 22, 55, 35]
@@ -403,7 +403,9 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                 if harga is not None and not _num_eq(product.price, harga):
                     product.price = harga; changed = True
 
-                hc_raw = _cell(row, col1, "Harga Coret")
+                # Support both "Harga Diskon" (new) and "Harga Coret" (old column name)
+                hc_col = "Harga Diskon" if "Harga Diskon" in col1 else "Harga Coret"
+                hc_raw = _cell(row, col1, hc_col)
                 if hc_raw is not None and str(hc_raw).strip() != "":
                     hc = _parse_num(hc_raw)
                     new_hc = hc if hc and hc > 0 else None
