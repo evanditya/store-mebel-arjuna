@@ -29,7 +29,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.user.role === "seller") {
+      if (data.user.role === "seller" || data.user.role === "admin") {
         router.push("/seller");
       } else {
         router.push("/");

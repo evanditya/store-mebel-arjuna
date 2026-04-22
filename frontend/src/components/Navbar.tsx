@@ -40,7 +40,7 @@ export default function Navbar({ sellerName, profilePicture, cartCount, brandCol
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 bg-white rounded-lg border shadow-lg py-1 w-48 z-50">
-                    {user.role === "seller" && <Link href="/seller" className="block px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setMenuOpen(false)} data-testid="link-seller-dashboard">Dashboard Penjual</Link>}
+                    {(user.role === "seller" || user.role === "admin") && <Link href="/seller" className="block px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setMenuOpen(false)} data-testid="link-seller-dashboard">Dashboard Penjual</Link>}
                     <Link href="/orders" className="block px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setMenuOpen(false)} data-testid="link-orders">Pesanan Saya</Link>
                     <Link href="/change-password" className="block px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setMenuOpen(false)} data-testid="link-account-settings">Profil & Pengaturan</Link>
                     <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50" data-testid="button-logout">Keluar</button>
