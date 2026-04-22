@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-interface User { id: string; email: string; name: string; role: "seller" | "buyer"; }
+interface User { id: string; email: string; name: string; role: "seller" | "admin" | "buyer"; }
 interface NavbarProps { sellerName: string; profilePicture: string | null; cartCount: number; brandColors?: string[]; }
 
 export default function Navbar({ sellerName, profilePicture, cartCount, brandColors = [] }: NavbarProps) {
