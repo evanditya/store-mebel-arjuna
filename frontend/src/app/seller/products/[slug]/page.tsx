@@ -228,11 +228,12 @@ export default function EditProductPage() {
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Harga Asli (Rp)</label>
                 <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-price" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Harga Coret (Rp)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Harga Diskon (Rp)</label>
+                <p className="text-xs text-gray-400 mb-1">Jika diisi, harga asli dicoret & harga diskon jadi harga jual</p>
                 <input type="number" value={originalPrice} onChange={(e) => setOriginalPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="Opsional" data-testid="input-product-original-price" />
               </div>
               <div>

@@ -52,7 +52,8 @@ async def add_to_cart(request: Request, db: Session = Depends(get_db)):
     if not product:
         return JSONResponse({"error": "Produk tidak ditemukan"}, status_code=404)
 
-    unit_price = product.price
+    effective_base = product.original_price if (product.original_price and product.original_price < product.price) else product.price
+    unit_price = effective_base
     if variant_name:
         variant = db.query(ProductVariant).filter(
             ProductVariant.product_id == product.id,
@@ -61,7 +62,7 @@ async def add_to_cart(request: Request, db: Session = Depends(get_db)):
         if variant and variant.price is not None:
             unit_price = variant.price
         elif variant and variant.price_modifier:
-            unit_price = product.price + variant.price_modifier
+            unit_price = effective_base + variant.price_modifier
 
     existing = db.query(CartItem).filter(
         CartItem.user_id == user.id,

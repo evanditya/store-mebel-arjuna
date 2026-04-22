@@ -12,9 +12,15 @@ function getVariantPrice(v: Variant, basePrice: number): number {
   return basePrice + (v.price_modifier || 0);
 }
 
+function getEffectiveBase(price: number, originalPrice: number | null): number {
+  return (originalPrice && originalPrice < price) ? originalPrice : price;
+}
+
 export default function ProductDetail({ product, formatPrice, formatSoldCount, onClose, onAddToCart }: ProductDetailProps) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const hasDiscount = !!(product.original_price && product.original_price < product.price);
+  const effectiveBase = getEffectiveBase(product.price, product.original_price);
   const [quantity, setQuantity] = useState(1);
   const images = product.images.length > 0 ? product.images : [product.primary_image];
 
@@ -67,43 +73,43 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     const selectedNames = variantTypes.map((t) => selectedVariants[t]).filter(Boolean);
     if (matchedCombo) {
       if (!matchedCombo.is_available) {
-        return product.price;
+        return effectiveBase;
       }
       if (matchedCombo.price != null) return matchedCombo.price;
     }
     if (selectedNames.length === 1) {
       const selected = displayVariants.find((v) => v.variant_name === selectedNames[0]);
       if (selected) {
-        if (!selected.is_available) return product.price;
-        return getVariantPrice(selected, product.price);
+        if (!selected.is_available) return effectiveBase;
+        return getVariantPrice(selected, effectiveBase);
       }
     }
-    return product.price;
-  }, [selectedVariants, matchedCombo, displayVariants, variantTypes, product.price]);
+    return effectiveBase;
+  }, [selectedVariants, matchedCombo, displayVariants, variantTypes, effectiveBase]);
 
   const hasDifferentPrices = useMemo(() => {
     if (displayVariants.length <= 1) return false;
-    const prices = displayVariants.filter((v) => v.is_available).map((v) => getVariantPrice(v, product.price));
+    const prices = displayVariants.filter((v) => v.is_available).map((v) => getVariantPrice(v, effectiveBase));
     return new Set(prices).size > 1;
-  }, [displayVariants, product.price]);
+  }, [displayVariants, effectiveBase]);
 
   const priceRange = useMemo(() => {
     if (combinations.length > 0) {
       const available = combinations.filter((c) => c.is_available);
       if (available.length > 0) {
-        const prices = available.map((c) => getVariantPrice(c, product.price));
+        const prices = available.map((c) => getVariantPrice(c, effectiveBase));
         return { min: Math.min(...prices), max: Math.max(...prices) };
       }
     }
     if (displayVariants.length > 0) {
       const available = displayVariants.filter((v) => v.is_available);
       if (available.length > 0) {
-        const prices = available.map((v) => getVariantPrice(v, product.price));
+        const prices = available.map((v) => getVariantPrice(v, effectiveBase));
         return { min: Math.min(...prices), max: Math.max(...prices) };
       }
     }
-    return { min: product.price, max: product.price };
-  }, [combinations, displayVariants, product.price]);
+    return { min: effectiveBase, max: effectiveBase };
+  }, [combinations, displayVariants, effectiveBase]);
 
   const isOptionAvailableInCombos = useMemo(() => {
     if (combinations.length === 0 || variantTypes.length <= 1) return (_type: string, _name: string) => true;
@@ -172,8 +178,8 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
           ) : (
             <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(priceRange.min)}</p>
           )}
-          {allVariantsSelected && !comboUnavailable && product.original_price && product.original_price > displayPrice && (
-            <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(product.original_price)}</p>
+          {allVariantsSelected && !comboUnavailable && hasDiscount && (
+            <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(product.price)}</p>
           )}
           {comboUnavailable && <p className="text-sm text-orange-500 mb-1">Kombinasi ini tidak tersedia, menggunakan harga dasar</p>}
           <p className="text-sm text-gray-500 mb-4">{formatSoldCount(product.sold_count)}</p>
