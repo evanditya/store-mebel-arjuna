@@ -15,6 +15,7 @@ interface Variant {
   variant_type: string;
   variant_name: string;
   price: number | null;
+  original_price: number | null;
   price_modifier: number;
   stock: number;
   is_available: boolean;
@@ -142,7 +143,7 @@ export default function EditProductPage() {
   };
 
   const addVariant = () => {
-    setVariants((prev) => [...prev, { variant_type: "Pilihan", variant_name: "", price: null, price_modifier: 0, stock: 100, is_available: true }]);
+    setVariants((prev) => [...prev, { variant_type: "Pilihan", variant_name: "", price: null, original_price: null, price_modifier: 0, stock: 0, is_available: true }]);
   };
 
   const updateVariant = (index: number, field: string, value: string | number | boolean | null) => {
@@ -176,6 +177,7 @@ export default function EditProductPage() {
           variant_type: v.variant_type,
           variant_name: v.variant_name,
           price: v.price,
+          original_price: v.original_price ?? null,
           price_modifier: v.price_modifier,
           stock: v.stock,
           is_available: v.is_available,
@@ -341,8 +343,12 @@ export default function EditProductPage() {
                     <input type="text" value={variant.variant_name} onChange={(e) => updateVariant(index, "variant_name", e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Merah / L / 256GB" data-testid={`input-variant-name-${index}`} />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Harga Khusus (Rp)</label>
+                    <label className="block text-xs text-gray-500 mb-1">Harga Asli (Rp)</label>
                     <input type="number" value={variant.price ?? ""} onChange={(e) => updateVariant(index, "price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Kosongkan = ikut harga utama" data-testid={`input-variant-price-${index}`} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Harga Diskon (Rp)</label>
+                    <input type="number" value={variant.original_price ?? ""} onChange={(e) => updateVariant(index, "original_price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Kosongkan jika tidak ada diskon" data-testid={`input-variant-original-price-${index}`} />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Stok</label>

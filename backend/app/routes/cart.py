@@ -60,7 +60,8 @@ async def add_to_cart(request: Request, db: Session = Depends(get_db)):
             ProductVariant.variant_name == variant_name
         ).first()
         if variant and variant.price is not None:
-            unit_price = variant.price
+            # Variant has absolute price — use original_price (discount) if set and lower
+            unit_price = variant.original_price if (variant.original_price and variant.original_price < variant.price) else variant.price
         elif variant and variant.price_modifier:
             unit_price = effective_base + variant.price_modifier
 

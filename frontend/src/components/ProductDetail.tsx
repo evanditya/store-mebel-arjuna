@@ -2,14 +2,25 @@
 
 import { useState, useMemo } from "react";
 
-interface Variant { variant_type: string; variant_name: string; price: number | null; price_modifier: number; stock: number; is_available: boolean; }
+interface Variant { variant_type: string; variant_name: string; price: number | null; original_price: number | null; price_modifier: number; stock: number; is_available: boolean; }
 interface Specification { name: string; value: string; }
 interface Product { name: string; slug: string; price: number; original_price: number | null; category: string; description: string; description_images?: string[]; specifications?: Specification[]; sold_count: number; stock: number; rating: number; primary_image: string; images: string[]; variants: Variant[]; }
 interface ProductDetailProps { product: Product; formatPrice: (price: number) => string; formatSoldCount: (count: number) => string; onClose: () => void; onAddToCart: (product: Product, variantName?: string, quantity?: number) => void; }
 
-function getVariantPrice(v: Variant, basePrice: number): number {
-  if (v.price != null) return v.price;
+function getVariantEffectivePrice(v: Variant, basePrice: number): number {
+  if (v.price != null) {
+    return (v.original_price != null && v.original_price < v.price) ? v.original_price : v.price;
+  }
   return basePrice + (v.price_modifier || 0);
+}
+
+function getVariantOriginalAbsPrice(v: Variant): number | null {
+  if (v.price != null && v.original_price != null && v.original_price < v.price) return v.price;
+  return null;
+}
+
+function getVariantPrice(v: Variant, basePrice: number): number {
+  return getVariantEffectivePrice(v, basePrice);
 }
 
 function getEffectiveBase(price: number, originalPrice: number | null): number {
@@ -72,10 +83,8 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   const displayPrice = useMemo(() => {
     const selectedNames = variantTypes.map((t) => selectedVariants[t]).filter(Boolean);
     if (matchedCombo) {
-      if (!matchedCombo.is_available) {
-        return effectiveBase;
-      }
-      if (matchedCombo.price != null) return matchedCombo.price;
+      if (!matchedCombo.is_available) return effectiveBase;
+      return getVariantPrice(matchedCombo, effectiveBase);
     }
     if (selectedNames.length === 1) {
       const selected = displayVariants.find((v) => v.variant_name === selectedNames[0]);
@@ -86,6 +95,23 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     }
     return effectiveBase;
   }, [selectedVariants, matchedCombo, displayVariants, variantTypes, effectiveBase]);
+
+  const displayStrikePrice = useMemo(() => {
+    const selectedNames = variantTypes.map((t) => selectedVariants[t]).filter(Boolean);
+    if (matchedCombo && matchedCombo.is_available) {
+      const absOrig = getVariantOriginalAbsPrice(matchedCombo);
+      if (absOrig != null) return absOrig;
+    }
+    if (selectedNames.length === 1) {
+      const selected = displayVariants.find((v) => v.variant_name === selectedNames[0]);
+      if (selected && selected.is_available) {
+        const absOrig = getVariantOriginalAbsPrice(selected);
+        if (absOrig != null) return absOrig;
+      }
+    }
+    if (hasDiscount) return product.price;
+    return null;
+  }, [selectedVariants, matchedCombo, displayVariants, variantTypes, hasDiscount, product.price]);
 
   const hasDifferentPrices = useMemo(() => {
     if (displayVariants.length <= 1) return false;
@@ -178,8 +204,8 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
           ) : (
             <p className="text-2xl font-bold text-red-600 mb-1">{formatPrice(priceRange.min)}</p>
           )}
-          {allVariantsSelected && !comboUnavailable && hasDiscount && (
-            <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(product.price)}</p>
+          {allVariantsSelected && !comboUnavailable && displayStrikePrice != null && (
+            <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(displayStrikePrice)}</p>
           )}
           {comboUnavailable && <p className="text-sm text-orange-500 mb-1">Kombinasi ini tidak tersedia, menggunakan harga dasar</p>}
           <p className="text-sm text-gray-500 mb-4">{formatSoldCount(product.sold_count)}</p>

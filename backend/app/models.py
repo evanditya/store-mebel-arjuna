@@ -68,6 +68,7 @@ class ProductVariant(Base):
     variant_type = Column(String, nullable=True)
     variant_name = Column(String, nullable=False)
     price = Column(Float, nullable=True)
+    original_price = Column(Float, nullable=True)
     price_modifier = Column(Float, default=0.0)
     stock = Column(Integer, default=0)
     is_available = Column(Boolean, default=True)

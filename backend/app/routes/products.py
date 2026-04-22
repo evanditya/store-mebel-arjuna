@@ -129,6 +129,7 @@ def product_to_dict(product: Product) -> dict:
                 "variant_type": v.variant_type,
                 "variant_name": v.variant_name,
                 "price": v.price,
+                "original_price": v.original_price,
                 "price_modifier": v.price_modifier,
                 "stock": v.stock,
                 "is_available": v.is_available,
@@ -160,6 +161,7 @@ def product_to_list_dict(product: Product) -> dict:
                 "variant_type": v.variant_type,
                 "variant_name": v.variant_name,
                 "price": v.price,
+                "original_price": v.original_price,
                 "price_modifier": v.price_modifier,
                 "stock": v.stock,
                 "is_available": v.is_available,
@@ -550,7 +552,8 @@ async def create_product(request: Request, db: Session = Depends(get_db)):
         db.add(ProductVariant(
             id=gen_id(), product_id=product.id,
             variant_type=v.get("variant_type"), variant_name=v.get("variant_name", ""),
-            price=v.get("price"), price_modifier=v.get("price_modifier", 0),
+            price=v.get("price"), original_price=v.get("original_price"),
+            price_modifier=v.get("price_modifier", 0),
             stock=v.get("stock", 0), is_available=v.get("is_available", True),
         ))
     db.commit()
@@ -579,6 +582,7 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
                 variant_type=v.get("variant_type", ""),
                 variant_name=v.get("variant_name", ""),
                 price=v.get("price"),
+                original_price=v.get("original_price"),
                 price_modifier=v.get("price_modifier", 0),
                 stock=v.get("stock", 0),
                 is_available=v.get("is_available", True),

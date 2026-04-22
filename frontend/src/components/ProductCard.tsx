@@ -1,4 +1,4 @@
-interface Variant { variant_type?: string; price: number | null; price_modifier: number; }
+interface Variant { variant_type?: string; price: number | null; original_price?: number | null; price_modifier: number; }
 interface ProductCardProps {
   product: { name: string; slug: string; price: number; original_price: number | null; primary_image: string; sold_count: number; rating: number; variants?: Variant[] };
   formatPrice: (price: number) => string;
@@ -15,7 +15,10 @@ function getPriceRange(basePrice: number, originalPrice: number | null, variants
   if (!variants || variants.length === 0) return { min: effectiveBase, max: effectiveBase };
   const filtered = variants.filter((v) => v.variant_type !== "_combinations");
   if (filtered.length === 0) return { min: effectiveBase, max: effectiveBase };
-  const prices = filtered.map((v) => v.price != null ? v.price : effectiveBase + (v.price_modifier || 0));
+  const prices = filtered.map((v) => {
+    if (v.price != null) return (v.original_price != null && v.original_price < v.price) ? v.original_price : v.price;
+    return effectiveBase + (v.price_modifier || 0);
+  });
   return { min: Math.min(...prices), max: Math.max(...prices) };
 }
 
