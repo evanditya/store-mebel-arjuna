@@ -33,7 +33,7 @@ export default function EditProductPage() {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
-  const [stock, setStock] = useState("");
+  const [stock, setStock] = useState("0");
   const [weight, setWeight] = useState("500");
   const [length, setLength] = useState("10");
   const [width, setWidth] = useState("10");
@@ -237,7 +237,7 @@ export default function EditProductPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
-                <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
+                <input type="number" value={stock} min="0" placeholder="0" onChange={(e) => setStock(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4">
@@ -345,7 +345,7 @@ export default function EditProductPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Stok</label>
-                    <input type="number" value={variant.stock} onChange={(e) => updateVariant(index, "stock", Number(e.target.value))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" data-testid={`input-variant-stock-${index}`} />
+                    <input type="number" value={variant.stock} min="0" onChange={(e) => updateVariant(index, "stock", Math.max(0, Number(e.target.value)))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" data-testid={`input-variant-stock-${index}`} />
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-sm">
