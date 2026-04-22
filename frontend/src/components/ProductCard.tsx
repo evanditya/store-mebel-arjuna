@@ -1,6 +1,6 @@
-interface Variant { variant_type?: string; price: number | null; original_price?: number | null; price_modifier: number; }
+interface Variant { variant_type?: string; price: number | null; original_price?: number | null; price_modifier: number; stock?: number; }
 interface ProductCardProps {
-  product: { name: string; slug: string; price: number; original_price: number | null; primary_image: string; sold_count: number; rating: number; variants?: Variant[] };
+  product: { name: string; slug: string; price: number; original_price: number | null; primary_image: string; sold_count: number; rating: number; stock?: number; variants?: Variant[] };
   formatPrice: (price: number) => string;
   formatSoldCount: (count: number) => string;
   onClick: () => void;
@@ -27,12 +27,21 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
   const { min, max } = getPriceRange(product.price, product.original_price, product.variants);
   const hasRange = min !== max;
 
+  const realVariants = (product.variants || []).filter((v) => v.variant_type !== "_combinations");
+  const totalStock = realVariants.length > 0
+    ? realVariants.reduce((s, v) => s + (v.stock ?? 0), 0)
+    : (product.stock ?? null);
+  const isOutOfStock = totalStock != null && totalStock === 0;
+
   return (
     <div className="bg-white rounded-lg border overflow-hidden cursor-pointer hover:shadow-md transition" onClick={onClick} data-testid={`product-card-${product.slug}`}>
       <div className="aspect-square relative">
         <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
-        {hasDiscount && (
+        {hasDiscount && !isOutOfStock && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{Math.round((1 - product.original_price! / product.price) * 100)}%</span>
+        )}
+        {isOutOfStock && (
+          <span className="absolute top-2 left-2 bg-gray-700 text-white text-xs px-1.5 py-0.5 rounded">Habis</span>
         )}
       </div>
       <div className="p-3">
@@ -41,7 +50,15 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
           {hasRange ? `${formatPrice(min)} - ${formatPrice(max)}` : formatPrice(min)}
         </p>
         {hasDiscount && <p className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</p>}
-        <div className="flex items-center gap-2 mt-1 text-xs text-gray-400"><span>{formatSoldCount(product.sold_count)}</span></div>
+        <div className="flex items-center justify-between mt-1 text-xs text-gray-400">
+          <span>{formatSoldCount(product.sold_count)}</span>
+          {totalStock != null && !isOutOfStock && totalStock <= 10 && (
+            <span className="text-orange-500 font-medium">Sisa {totalStock}</span>
+          )}
+          {totalStock != null && !isOutOfStock && totalStock > 10 && (
+            <span>Stok: {totalStock}</span>
+          )}
+        </div>
       </div>
     </div>
   );

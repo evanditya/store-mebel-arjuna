@@ -166,7 +166,23 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   }, [matchedCombo]);
 
   const allVariantsSelected = variantTypes.length === 0 || variantTypes.every((t) => t in selectedVariants);
-  const canAddToCart = allVariantsSelected && !comboUnavailable;
+
+  const selectedVariantObj = useMemo(() => {
+    const selectedNames = variantTypes.map((t) => selectedVariants[t]).filter(Boolean);
+    if (matchedCombo) return matchedCombo.is_available ? matchedCombo : null;
+    if (selectedNames.length === 1) {
+      return displayVariants.find((v) => v.variant_name === selectedNames[0]) ?? null;
+    }
+    return null;
+  }, [matchedCombo, selectedVariants, variantTypes, displayVariants]);
+
+  const displayStock = useMemo(() => {
+    if (displayVariants.length === 0) return product.stock;
+    if (allVariantsSelected && !comboUnavailable && selectedVariantObj != null) return selectedVariantObj.stock;
+    return null;
+  }, [displayVariants.length, allVariantsSelected, comboUnavailable, selectedVariantObj, product.stock]);
+
+  const canAddToCart = allVariantsSelected && !comboUnavailable && (displayStock == null || displayStock > 0);
   const missingVariants = variantTypes.filter((t) => !(t in selectedVariants));
 
   const combinedVariantName = variantTypes.map((t) => selectedVariants[t]).filter(Boolean).join(" / ") || undefined;
@@ -208,7 +224,21 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
             <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(displayStrikePrice)}</p>
           )}
           {comboUnavailable && <p className="text-sm text-orange-500 mb-1">Kombinasi ini tidak tersedia, menggunakan harga dasar</p>}
-          <p className="text-sm text-gray-500 mb-4">{formatSoldCount(product.sold_count)}</p>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <p className="text-sm text-gray-500">{formatSoldCount(product.sold_count)}</p>
+            {displayStock != null && (
+              displayStock === 0 ? (
+                <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">Stok Habis</span>
+              ) : displayStock <= 5 ? (
+                <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">Sisa {displayStock}</span>
+              ) : (
+                <span className="text-xs text-gray-400">Stok: {displayStock}</span>
+              )
+            )}
+            {displayStock == null && displayVariants.length > 0 && (
+              <span className="text-xs text-gray-400">Pilih varian untuk melihat stok</span>
+            )}
+          </div>
           {displayVariants.length > 0 && (
             <div className="mb-4">
               {variantTypes.map((type) => (
@@ -221,16 +251,20 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
                       const isSelected = selectedVariants[type] === v.variant_name;
                       const comboAvailable = isOptionAvailableInCombos(type, v.variant_name);
                       const effectiveAvailable = v.is_available && comboAvailable;
+                      const stockLabel = !effectiveAvailable ? null : v.stock === 0 ? "Habis" : v.stock <= 5 ? `Sisa ${v.stock}` : null;
                       return (
                         <button
                           key={v.variant_name}
                           onClick={() => effectiveAvailable && handleSelectVariant(type, v.variant_name)}
                           disabled={!effectiveAvailable}
-                          className={`px-3 py-1.5 rounded-lg text-sm border transition ${!effectiveAvailable ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through" : isSelected ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 hover:border-gray-400"}`}
+                          className={`px-3 py-1.5 rounded-lg text-sm border transition text-left ${!effectiveAvailable ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through" : isSelected ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 hover:border-gray-400"}`}
                           data-testid={`button-variant-${v.variant_name}`}
                         >
                           <span>{v.variant_name}</span>
                           {showPrice && <span className="block text-xs opacity-75">{formatPrice(vPrice)}</span>}
+                          {stockLabel && (
+                            <span className={`block text-xs ${isSelected ? "opacity-75" : v.stock === 0 ? "text-red-400" : "text-orange-500"}`}>{stockLabel}</span>
+                          )}
                         </button>
                       );
                     })}
@@ -244,7 +278,12 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
             <div className="flex items-center gap-3">
               <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-8 h-8 rounded border flex items-center justify-center" data-testid="button-qty-decrease">-</button>
               <span className="w-8 text-center">{quantity}</span>
-              <button onClick={() => setQuantity(quantity + 1)} className="w-8 h-8 rounded border flex items-center justify-center" data-testid="button-qty-increase">+</button>
+              <button
+                onClick={() => setQuantity(displayStock != null ? Math.min(displayStock, quantity + 1) : quantity + 1)}
+                disabled={displayStock != null && quantity >= displayStock}
+                className="w-8 h-8 rounded border flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="button-qty-increase"
+              >+</button>
             </div>
           </div>
           {product.specifications && product.specifications.length > 0 && (
