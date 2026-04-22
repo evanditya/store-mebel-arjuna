@@ -21,7 +21,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 const BannerCropper = dynamic(() => import("@/components/BannerCropper"), { ssr: false });
 
-interface Product { name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; }
+interface ProductVariantStock { variant_type: string; variant_name: string; stock: number; is_available: boolean; }
+interface Product { name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; variants?: ProductVariantStock[]; }
 interface Banner {
   id: number;
   image_url: string;
@@ -171,6 +172,7 @@ export default function SellerDashboard() {
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [expandedStockSlugs, setExpandedStockSlugs] = useState<Set<string>>(new Set());
   const [excelImporting, setExcelImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ total: number; updated: number; skipped: number; detail?: { produk_diperbarui: number; produk_tidak_berubah: number; varian_diperbarui: number; varian_tidak_berubah: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
@@ -643,25 +645,66 @@ export default function SellerDashboard() {
             ) : (
               <>
                 <div className="space-y-2">
-                  {products.map((product) => (
-                    <div key={product.slug} className="bg-white rounded-lg border p-4 flex items-center gap-4" data-testid={`product-row-${product.slug}`}>
-                      <img
-                        src={product.primary_image || "/images/placeholder.svg"}
-                        alt=""
-                        className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/placeholder.svg"; }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium truncate">{product.name}</h3>
-                        <p className="text-sm text-gray-500">{product.category}</p>
-                        <div className="flex gap-4 mt-1 text-sm"><span className="text-red-600 font-medium">{formatPrice(product.price)}</span><span className="text-gray-400">Stok: {product.stock}</span><span className="text-gray-400">{product.sold_count} terjual</span></div>
+                  {products.map((product) => {
+                    const realVariants = (product.variants || []).filter((v) => v.variant_type !== "_combinations");
+                    const hasVariants = realVariants.length > 0;
+                    const totalVariantStock = hasVariants ? realVariants.reduce((s, v) => s + (v.stock || 0), 0) : product.stock;
+                    const isStockExpanded = expandedStockSlugs.has(product.slug);
+                    const toggleStock = () => setExpandedStockSlugs((prev) => {
+                      const next = new Set(prev);
+                      next.has(product.slug) ? next.delete(product.slug) : next.add(product.slug);
+                      return next;
+                    });
+                    return (
+                      <div key={product.slug} className="bg-white rounded-lg border overflow-hidden" data-testid={`product-row-${product.slug}`}>
+                        <div className="p-4 flex items-center gap-4">
+                          <img
+                            src={product.primary_image || "/images/placeholder.svg"}
+                            alt=""
+                            className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/placeholder.svg"; }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium truncate">{product.name}</h3>
+                            <p className="text-sm text-gray-500">{product.category}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm items-center">
+                              <span className="text-red-600 font-medium">{formatPrice(product.price)}</span>
+                              <button
+                                onClick={hasVariants ? toggleStock : undefined}
+                                className={`flex items-center gap-1 ${hasVariants ? "text-gray-600 hover:text-gray-900 cursor-pointer" : "text-gray-400 cursor-default"}`}
+                              >
+                                <span>Stok: <span className={totalVariantStock === 0 ? "text-red-500 font-semibold" : ""}>{totalVariantStock}</span></span>
+                                {hasVariants && (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className={`w-3.5 h-3.5 transition-transform ${isStockExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                )}
+                              </button>
+                              <span className="text-gray-400">{product.sold_count} terjual</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Link href={`/seller/products/${product.slug}`} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-testid={`button-edit-${product.slug}`}>Edit</Link>
+                            <button onClick={() => handleDelete(product.slug)} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition" data-testid={`button-delete-${product.slug}`}>Hapus</button>
+                          </div>
+                        </div>
+                        {hasVariants && isStockExpanded && (
+                          <div className="border-t bg-gray-50 px-4 py-3">
+                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Stok per Varian</p>
+                            <div className="flex flex-wrap gap-2">
+                              {realVariants.map((v) => (
+                                <span key={v.variant_name} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${v.stock === 0 ? "bg-red-50 border-red-200 text-red-600" : v.stock <= 5 ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-white border-gray-200 text-gray-700"}`}>
+                                  <span>{v.variant_name}</span>
+                                  <span className="font-bold">{v.stock}</span>
+                                  {!v.is_available && <span className="text-gray-400">(nonaktif)</span>}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <Link href={`/seller/products/${product.slug}`} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-testid={`button-edit-${product.slug}`}>Edit</Link>
-                        <button onClick={() => handleDelete(product.slug)} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition" data-testid={`button-delete-${product.slug}`}>Hapus</button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {products.length === 0 && (
                     <div className="text-center py-12 text-gray-400">{productSearch ? `Tidak ada produk yang cocok dengan "${productSearch}"` : "Belum ada produk"}</div>
                   )}
