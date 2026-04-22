@@ -287,24 +287,25 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
 
     # ── Sheet 2: Variants (one row per purchaseable variant) ─────────────────
     ws2 = wb.create_sheet(title="Varian")
-    var_cols = ["Nama Produk", "Nama Varian", "Harga", "Stok", "Tersedia (Ya/Tidak)"]
-    var_widths = [42, 45, 16, 10, 18]
+    var_cols = ["Nama Produk", "Nama Varian", "Harga Asli", "Harga Diskon", "Stok", "Tersedia (Ya/Tidak)"]
+    var_widths = [42, 45, 16, 16, 10, 18]
     border2, left2 = _apply_sheet_style(ws2, var_cols, var_widths)
 
     row_idx = 2
     for p in products:
         display_variants = _get_purchaseable_variants(p.variants)
         for v in display_variants:
-            display_name = v.variant_name  # e.g. "divan dan sandaran / 120x200" or "Merah"
+            display_name = v.variant_name
             row = [p.name, display_name,
                    int(v.price) if v.price is not None else int(p.price),
+                   int(v.original_price) if v.original_price else "",
                    v.stock or 0,
                    "Ya" if v.is_available else "Tidak"]
             for col_idx, value in enumerate(row, start=1):
                 cell = ws2.cell(row=row_idx, column=col_idx, value=value)
                 cell.border = border2
                 cell.alignment = left2
-                if col_idx == 3:
+                if col_idx in (3, 4):
                     cell.number_format = '#,##0'
             ws2.row_dimensions[row_idx].height = 18
             row_idx += 1
@@ -473,9 +474,20 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
                 try:
                     changed = False
 
-                    harga = _parse_num(_cell(row, col2, "Harga"))
+                    # Support both "Harga Asli" (new) and "Harga" (old column name)
+                    harga_raw = _cell(row, col2, "Harga Asli") if "Harga Asli" in col2 else _cell(row, col2, "Harga")
+                    harga = _parse_num(harga_raw)
                     if harga is not None and not _num_eq(variant.price, harga):
                         variant.price = harga; changed = True
+
+                    hd_raw = _cell(row, col2, "Harga Diskon")
+                    if hd_raw is not None and str(hd_raw).strip() != "":
+                        hd = _parse_num(hd_raw)
+                        new_hd = hd if hd and hd > 0 else None
+                        if not _num_eq(variant.original_price, new_hd):
+                            variant.original_price = new_hd; changed = True
+                    elif hd_raw is not None and str(hd_raw).strip() == "" and variant.original_price is not None:
+                        variant.original_price = None; changed = True
 
                     stok_raw = _cell(row, col2, "Stok")
                     if stok_raw is not None and str(stok_raw).strip():
