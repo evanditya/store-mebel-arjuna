@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Product, ProductImage, gen_id
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, is_staff
 import os
 import uuid
 
@@ -16,7 +16,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.post("/upload-image")
 async def upload_image(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not is_staff(user):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
@@ -34,7 +34,7 @@ async def upload_image(request: Request, file: UploadFile = File(...), db: Sessi
 @router.post("/products/{slug}/images")
 async def add_product_image(slug: str, request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not is_staff(user):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     product = db.query(Product).filter(Product.slug == slug).first()
@@ -67,7 +67,7 @@ async def add_product_image(slug: str, request: Request, file: UploadFile = File
 @router.delete("/products/{slug}/images/{image_id}")
 async def delete_product_image(slug: str, image_id: str, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not is_staff(user):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     product = db.query(Product).filter(Product.slug == slug).first()

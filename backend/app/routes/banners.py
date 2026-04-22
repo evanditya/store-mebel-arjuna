@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Banner
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm
 import os, shutil, uuid
 
 router = APIRouter(prefix="/api/banners")
@@ -33,7 +33,7 @@ def get_active_banners(db: Session = Depends(get_db)):
 @router.get("/all")
 def get_all_banners(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     banners = db.query(Banner).order_by(Banner.order).all()
     return [banner_to_dict(b) for b in banners]
@@ -42,7 +42,7 @@ def get_all_banners(request: Request, db: Session = Depends(get_db)):
 @router.post("/upload")
 async def upload_banner_image(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     ext = (file.filename or "banner.jpg").rsplit(".", 1)[-1].lower()
     if ext not in ("jpg", "jpeg", "png", "webp"):
@@ -61,7 +61,7 @@ async def upload_banner_image(request: Request, file: UploadFile = File(...), db
 @router.post("")
 def create_banner(request: Request, data: dict, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     max_order = db.query(Banner).count()
     banner = Banner(
@@ -80,7 +80,7 @@ def create_banner(request: Request, data: dict, db: Session = Depends(get_db)):
 @router.put("/reorder")
 def reorder_banners(request: Request, data: dict, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     ids: list = data.get("ids", [])
     for idx, bid in enumerate(ids):
@@ -92,7 +92,7 @@ def reorder_banners(request: Request, data: dict, db: Session = Depends(get_db))
 @router.put("/{banner_id}")
 def update_banner(banner_id: int, request: Request, data: dict, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     banner = db.query(Banner).filter(Banner.id == banner_id).first()
     if not banner:
@@ -111,7 +111,7 @@ def update_banner(banner_id: int, request: Request, data: dict, db: Session = De
 @router.delete("/{banner_id}")
 def delete_banner(banner_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "banners"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     banner = db.query(Banner).filter(Banner.id == banner_id).first()
     if not banner:

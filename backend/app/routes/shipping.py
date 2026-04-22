@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Order, OrderItem, User, gen_id
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm, is_staff
 from app.config import BITESHIP_API_KEY
 import httpx
 from datetime import datetime
@@ -141,7 +141,7 @@ async def get_allowed_couriers_endpoint():
 async def set_allowed_couriers(request: Request, db: Session = Depends(get_db)):
     """Seller-only: save the list of allowed courier codes."""
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "settings"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     allowed = body.get("allowed_couriers", [])
@@ -320,7 +320,7 @@ async def get_origin(request: Request, db: Session = Depends(get_db)):
 @router.post("/origin")
 async def update_origin(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "orders"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     area_id = body.get("area_id", "")
@@ -354,7 +354,7 @@ async def update_origin(request: Request, db: Session = Depends(get_db)):
 @router.post("/create-order/{order_id}")
 async def create_shipment(order_id: str, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "orders"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     if not BITESHIP_API_KEY:
         return JSONResponse({"error": "Biteship belum dikonfigurasi"}, status_code=400)
@@ -477,7 +477,7 @@ async def track_shipment(order_id: str, request: Request, db: Session = Depends(
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
-    if user.role != "seller" and order.user_id != user.id:
+    if not is_staff(user) and order.user_id != user.id:
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     if not order.biteship_order_id or not BITESHIP_API_KEY:
@@ -556,7 +556,7 @@ async def track_shipment(order_id: str, request: Request, db: Session = Depends(
 @router.get("/label/{order_id}")
 async def shipping_label(order_id: str, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "orders"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     order = db.query(Order).filter(Order.id == order_id).first()

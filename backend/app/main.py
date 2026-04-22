@@ -3,13 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import engine, Base
-from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners
+from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners, admins
 import os
+
+
+def _run_migrations():
+    from sqlalchemy import text, inspect
+    with engine.connect() as conn:
+        inspector = inspect(engine)
+        user_cols = [c["name"] for c in inspector.get_columns("users")]
+        if "permissions" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
+            conn.commit()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
     yield
 
 
@@ -47,6 +58,7 @@ app.include_router(upload.router)
 app.include_router(shipping.router)
 app.include_router(branding.router)
 app.include_router(banners.router)
+app.include_router(admins.router)
 
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)

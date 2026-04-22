@@ -164,9 +164,17 @@ export default function SellerDashboard() {
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings">("products");
+  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings" | "admins">("products");
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; permissions: string[] } | null>(null);
+  const [adminUsers, setAdminUsers] = useState<{ id: string; name: string; email: string; permissions: string[]; created_at: string }[]>([]);
+  const [allPermissions] = useState(["products", "orders", "banners", "settings"]);
+  const permLabels: Record<string, string> = { products: "Produk", orders: "Pesanan", banners: "Banner", settings: "Pengaturan" };
+  const [adminForm, setAdminForm] = useState({ name: "", email: "", password: "", permissions: [] as string[] });
+  const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
+  const [editAdminForm, setEditAdminForm] = useState({ name: "", email: "", password: "", permissions: [] as string[] });
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminMsg, setAdminMsg] = useState("");
   const [shippingLoading, setShippingLoading] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
@@ -313,7 +321,18 @@ export default function SellerDashboard() {
   }, [productSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user || data.user.role !== "seller") { router.push("/login"); return; } setUser(data.user); });
+    fetch("/api/auth/me").then((r) => r.json()).then((data) => {
+      if (!data.user || (data.user.role !== "seller" && data.user.role !== "admin")) { router.push("/login"); return; }
+      setUser(data.user);
+      if (data.user.role === "admin") {
+        const perms: string[] = data.user.permissions || [];
+        const firstTab = (["products", "orders", "banners", "settings"] as const).find((p) => perms.includes(p));
+        if (firstTab) setTab(firstTab);
+      }
+      if (data.user.role === "seller") {
+        fetch("/api/admin/users").then((r) => r.json()).then((d) => { if (d.admins) setAdminUsers(d.admins); }).catch(() => {});
+      }
+    });
     Promise.all([loadProducts(1, ""), fetch("/api/orders").then((r) => r.json())]).then(([, orderData]: [void, { orders?: Order[] }]) => {
       const list = orderData?.orders || [];
       setOrders(list);
@@ -525,11 +544,22 @@ export default function SellerDashboard() {
           <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Total Pesanan</p><p className="text-2xl font-bold" data-testid="text-total-orders">{orders.length}</p></div>
           <div className="bg-white rounded-lg border p-4"><p className="text-sm text-gray-500">Pendapatan</p><p className="text-2xl font-bold text-green-600" data-testid="text-revenue">{formatPrice(totalRevenue)}</p></div>
         </div>
-        <div className="flex gap-2 mb-4">
-          <button onClick={() => setTab("products")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "products" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-products">Produk ({productTotal})</button>
-          <button onClick={() => setTab("orders")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "orders" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-orders">Pesanan ({orders.length})</button>
-          <button onClick={() => setTab("banners")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "banners" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-banners">Banner ({banners.length})</button>
-          <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {(user?.role === "seller" || (user?.permissions || []).includes("products")) && (
+            <button onClick={() => setTab("products")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "products" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-products">Produk ({productTotal})</button>
+          )}
+          {(user?.role === "seller" || (user?.permissions || []).includes("orders")) && (
+            <button onClick={() => setTab("orders")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "orders" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-orders">Pesanan ({orders.length})</button>
+          )}
+          {(user?.role === "seller" || (user?.permissions || []).includes("banners")) && (
+            <button onClick={() => setTab("banners")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "banners" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-banners">Banner ({banners.length})</button>
+          )}
+          {(user?.role === "seller" || (user?.permissions || []).includes("settings")) && (
+            <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
+          )}
+          {user?.role === "seller" && (
+            <button onClick={() => setTab("admins")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "admins" ? "bg-indigo-700 text-white" : "bg-white border text-indigo-700"}`} data-testid="tab-admins">Kelola Admin</button>
+          )}
         </div>
         {tab === "products" && (
           <div>
@@ -1196,6 +1226,125 @@ export default function SellerDashboard() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {tab === "admins" && user?.role === "seller" && (
+          <div className="bg-white rounded-xl border p-6">
+            <h2 className="font-bold text-lg mb-6">Kelola Admin</h2>
+
+            {adminMsg && (
+              <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${adminMsg.startsWith("Berhasil") ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+                {adminMsg}
+              </div>
+            )}
+
+            <div className="mb-8">
+              <h3 className="font-semibold text-sm text-gray-700 mb-3">Tambah Admin Baru</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <input value={adminForm.name} onChange={(e) => setAdminForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nama" className="border rounded-lg px-3 py-2 text-sm" />
+                <input value={adminForm.email} onChange={(e) => setAdminForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" type="email" className="border rounded-lg px-3 py-2 text-sm" />
+                <input value={adminForm.password} onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))} placeholder="Password (min. 6 karakter)" type="password" className="border rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="mb-3">
+                <p className="text-xs text-gray-500 mb-2">Akses menu:</p>
+                <div className="flex flex-wrap gap-2">
+                  {allPermissions.map((p) => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={adminForm.permissions.includes(p)}
+                        onChange={(e) => setAdminForm((f) => ({ ...f, permissions: e.target.checked ? [...f.permissions, p] : f.permissions.filter((x) => x !== p) }))}
+                        className="accent-indigo-600" />
+                      <span className="text-sm">{permLabels[p]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <button disabled={adminLoading} onClick={async () => {
+                setAdminLoading(true); setAdminMsg("");
+                const res = await fetch("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(adminForm) });
+                const data = await res.json();
+                if (data.admin) { setAdminUsers((prev) => [...prev, data.admin]); setAdminForm({ name: "", email: "", password: "", permissions: [] }); setAdminMsg("Berhasil menambah admin."); }
+                else setAdminMsg(data.error || "Gagal menambah admin.");
+                setAdminLoading(false);
+              }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
+                {adminLoading ? "Menyimpan..." : "Tambah Admin"}
+              </button>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-sm text-gray-700 mb-3">Daftar Admin ({adminUsers.length})</h3>
+              {adminUsers.length === 0 ? (
+                <p className="text-sm text-gray-400">Belum ada admin yang ditambahkan.</p>
+              ) : (
+                <div className="divide-y">
+                  {adminUsers.map((admin) => (
+                    <div key={admin.id} className="py-4">
+                      {editingAdminId === admin.id ? (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <input value={editAdminForm.name} onChange={(e) => setEditAdminForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nama" className="border rounded-lg px-3 py-2 text-sm" />
+                            <input value={editAdminForm.email} onChange={(e) => setEditAdminForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" type="email" className="border rounded-lg px-3 py-2 text-sm" />
+                            <input value={editAdminForm.password} onChange={(e) => setEditAdminForm((f) => ({ ...f, password: e.target.value }))} placeholder="Password baru (kosongkan jika tidak diubah)" type="password" className="border rounded-lg px-3 py-2 text-sm" />
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-500 mb-2">Akses menu:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {allPermissions.map((p) => (
+                                <label key={p} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input type="checkbox" checked={editAdminForm.permissions.includes(p)}
+                                    onChange={(e) => setEditAdminForm((f) => ({ ...f, permissions: e.target.checked ? [...f.permissions, p] : f.permissions.filter((x) => x !== p) }))}
+                                    className="accent-indigo-600" />
+                                  <span className="text-sm">{permLabels[p]}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button disabled={adminLoading} onClick={async () => {
+                              setAdminLoading(true); setAdminMsg("");
+                              const body: Record<string, unknown> = { name: editAdminForm.name, email: editAdminForm.email, permissions: editAdminForm.permissions };
+                              if (editAdminForm.password) body.password = editAdminForm.password;
+                              const res = await fetch(`/api/admin/users/${admin.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                              const data = await res.json();
+                              if (data.admin) { setAdminUsers((prev) => prev.map((a) => a.id === admin.id ? data.admin : a)); setEditingAdminId(null); setAdminMsg("Berhasil memperbarui admin."); }
+                              else setAdminMsg(data.error || "Gagal memperbarui.");
+                              setAdminLoading(false);
+                            }} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition">Simpan</button>
+                            <button onClick={() => setEditingAdminId(null)} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">Batal</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-sm">{admin.name}</p>
+                            <p className="text-xs text-gray-400">{admin.email}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {admin.permissions.length === 0 ? (
+                                <span className="text-xs text-red-400">Tidak ada akses</span>
+                              ) : admin.permissions.map((p) => (
+                                <span key={p} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full">{permLabels[p] || p}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => { setEditingAdminId(admin.id); setEditAdminForm({ name: admin.name, email: admin.email, password: "", permissions: [...admin.permissions] }); setAdminMsg(""); }}
+                              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">Edit</button>
+                            <button onClick={async () => {
+                              if (!confirm(`Hapus admin "${admin.name}"?`)) return;
+                              setAdminMsg("");
+                              const res = await fetch(`/api/admin/users/${admin.id}`, { method: "DELETE" });
+                              const data = await res.json();
+                              if (data.success) { setAdminUsers((prev) => prev.filter((a) => a.id !== admin.id)); setAdminMsg("Berhasil menghapus admin."); }
+                              else setAdminMsg(data.error || "Gagal menghapus.");
+                            }} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition">Hapus</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

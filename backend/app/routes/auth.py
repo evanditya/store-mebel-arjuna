@@ -6,6 +6,7 @@ from app.models import User, gen_id
 from app.config import JWT_SECRET
 import bcrypt
 import re
+import json as _json
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 
@@ -32,12 +33,41 @@ def create_token(user_id: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
 
+ALL_PERMISSIONS = ["products", "orders", "banners", "settings"]
+
+
+def parse_permissions(user: User) -> list:
+    if user.role == "seller":
+        return ALL_PERMISSIONS[:]
+    if user.role == "admin" and user.permissions:
+        try:
+            return _json.loads(user.permissions)
+        except Exception:
+            return []
+    return []
+
+
+def is_staff(user) -> bool:
+    return user is not None and user.role in ("seller", "admin")
+
+
+def has_perm(user, perm: str) -> bool:
+    if user is None:
+        return False
+    if user.role == "seller":
+        return True
+    if user.role == "admin":
+        return perm in parse_permissions(user)
+    return False
+
+
 def user_dict(user: User) -> dict:
     return {
         "id": user.id, "email": user.email, "name": user.name, "role": user.role,
         "phone": user.phone, "address": user.address, "city": user.city,
         "province": user.province, "postal_code": user.postal_code,
         "area_id": user.area_id, "area_name": user.area_name,
+        "permissions": parse_permissions(user),
     }
 
 

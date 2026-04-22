@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Order, OrderItem, CartItem, Product, User, gen_id
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm, is_staff
 from datetime import datetime
 import threading
 import json as _json
@@ -77,7 +77,7 @@ async def list_orders(request: Request, db: Session = Depends(get_db)):
     # ?mine=1  → always return only the current user's orders (used by buyer "Pesanan Saya" page)
     # seller without ?mine → return all orders (used by seller dashboard)
     mine = request.query_params.get("mine", "0")
-    if user.role == "seller" and mine != "1":
+    if is_staff(user) and mine != "1":
         orders = db.query(Order).order_by(Order.created_at.desc()).all()
     else:
         orders = db.query(Order).filter(Order.user_id == user.id).order_by(Order.created_at.desc()).all()
@@ -185,7 +185,7 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
 @router.put("/orders")
 async def update_order_status(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "orders"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     order_id = body.get("order_id", "")

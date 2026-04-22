@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm
 import json, os, shutil, uuid, time
 
 router = APIRouter(prefix="/api/branding")
@@ -54,7 +54,7 @@ async def get_branding():
 @router.put("")
 async def update_branding(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "settings"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     config = _load_config()
@@ -92,7 +92,7 @@ async def upload_image(
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "settings"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     if not file.content_type or not file.content_type.startswith("image/"):
         return JSONResponse({"error": "File harus berupa gambar"}, status_code=400)

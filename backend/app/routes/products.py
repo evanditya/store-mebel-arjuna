@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Product, ProductImage, ProductVariant, gen_id
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm, is_staff
 import json
 import os
 import re
@@ -250,7 +250,7 @@ def _apply_sheet_style(ws, header_cols, col_widths):
 @router.get("/products/export-excel")
 async def export_products_excel(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     from openpyxl import Workbook
@@ -323,7 +323,7 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
 @router.post("/products/import-excel")
 async def import_products_excel(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     if not file.filename.endswith((".xlsx", ".xls")):
@@ -560,7 +560,7 @@ async def get_product(slug: str, db: Session = Depends(get_db)):
 @router.post("/products")
 async def create_product(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     body = await request.json()
     slug = generate_slug(body.get("name", "product"))
@@ -604,7 +604,7 @@ async def create_product(request: Request, db: Session = Depends(get_db)):
 @router.put("/products/{slug}")
 async def update_product(slug: str, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     product = db.query(Product).filter(Product.slug == slug).first()
     if not product:
@@ -646,7 +646,7 @@ async def list_categories(db: Session = Depends(get_db)):
 @router.delete("/products/{slug}")
 async def delete_product(slug: str, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     product = db.query(Product).filter(Product.slug == slug).first()
     if not product:

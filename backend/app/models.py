@@ -23,6 +23,7 @@ class User(Base):
     area_name = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="buyer")
+    permissions = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
