@@ -114,7 +114,7 @@ def product_to_dict(product: Product) -> dict:
         "description_images": desc_images,
         "specifications": specs,
         "sold_count": product.sold_count,
-        "stock": product.stock,
+        "stock": effective_stock(product),
         "rating": product.rating,
         "weight": product.weight or 500,
         "length": product.length or 10,
@@ -145,6 +145,21 @@ def generate_slug(name: str) -> str:
     return f"{base}-{suffix}"
 
 
+def effective_stock(product: Product) -> int:
+    """Return computed stock: sum of non-combination variant stocks if variants exist, else product.stock."""
+    real_variants = [v for v in product.variants if v.variant_type != "_combinations"]
+    if real_variants:
+        return sum(v.stock or 0 for v in real_variants)
+    return product.stock or 0
+
+
+def sync_product_stock(product: Product) -> None:
+    """Write effective_stock back to product.stock so DB stays in sync."""
+    real_variants = [v for v in product.variants if v.variant_type != "_combinations"]
+    if real_variants:
+        product.stock = sum(v.stock or 0 for v in real_variants)
+
+
 def product_to_list_dict(product: Product) -> dict:
     return {
         "name": product.name,
@@ -153,7 +168,7 @@ def product_to_list_dict(product: Product) -> dict:
         "original_price": product.original_price,
         "category": product.category,
         "sold_count": product.sold_count,
-        "stock": product.stock,
+        "stock": effective_stock(product),
         "rating": product.rating,
         "primary_image": product.primary_image,
         "variants": [
@@ -433,6 +448,7 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
 
     # ── Sheet 2: Variants (no DB queries inside loop) ────────────────────────
     ws2 = wb["Varian"] if "Varian" in wb.sheetnames else None
+    affected_product_ids: set = set()
     if ws2 is not None:
         rows2 = list(ws2.iter_rows(values_only=True))
         if len(rows2) > 1:
@@ -478,12 +494,19 @@ async def import_products_excel(request: Request, file: UploadFile = File(...), 
 
                     if changed:
                         updated_var += 1
+                        affected_product_ids.add(product.id)
                     else:
                         skipped_var += 1
                 except Exception as e:
                     errors.append({"row": row_num,
                                    "name": f"{nama} → {nama_varian}",
                                    "error": str(e)})
+
+    # ── Sync product.stock from variant stocks for all affected products ──────
+    for pid in affected_product_ids:
+        prod = next((p for p in prod_by_name.values() if p.id == pid), None)
+        if prod:
+            sync_product_stock(prod)
 
     # ── Single commit for everything ─────────────────────────────────────────
     try:
@@ -556,6 +579,9 @@ async def create_product(request: Request, db: Session = Depends(get_db)):
             price_modifier=v.get("price_modifier", 0),
             stock=v.get("stock", 0), is_available=v.get("is_available", True),
         ))
+    real_vars = [v for v in body.get("variants", []) if v.get("variant_type") != "_combinations"]
+    if real_vars:
+        product.stock = sum(v.get("stock", 0) or 0 for v in real_vars)
     db.commit()
     db.refresh(product)
     return {"product": product_to_dict(product)}
@@ -587,6 +613,9 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
                 stock=v.get("stock", 0),
                 is_available=v.get("is_available", True),
             ))
+        real_vars = [v for v in body["variants"] if v.get("variant_type") != "_combinations"]
+        if real_vars:
+            product.stock = sum(v.get("stock", 0) or 0 for v in real_vars)
 
     db.commit()
     db.refresh(product)
