@@ -164,7 +164,9 @@ export default function EditProductPage() {
         name,
         price: Number(price),
         original_price: originalPrice ? Number(originalPrice) : null,
-        stock: Number(stock),
+        stock: variants.filter((v) => v.variant_name.trim()).length > 0
+          ? variants.filter((v) => v.variant_name.trim()).reduce((sum, v) => sum + (v.stock || 0), 0)
+          : Number(stock),
         weight: Number(weight) || 500,
         length: Number(length) || 10,
         width: Number(width) || 10,
@@ -240,7 +242,20 @@ export default function EditProductPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
-                <input type="number" value={stock} min="0" placeholder="0" onChange={(e) => setStock(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
+                {variants.filter((v) => v.variant_name.trim()).length > 0 ? (
+                  <>
+                    <input
+                      type="number"
+                      value={variants.filter((v) => v.variant_name.trim()).reduce((sum, v) => sum + (v.stock || 0), 0)}
+                      readOnly
+                      className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none"
+                      data-testid="input-product-stock"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Total otomatis dari stok varian</p>
+                  </>
+                ) : (
+                  <input type="number" value={stock} min="0" placeholder="0" onChange={(e) => setStock(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
+                )}
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4">
