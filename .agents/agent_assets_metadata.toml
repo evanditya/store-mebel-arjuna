@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "3M91SFzFTatX8R0bm0Nlh"
+uri = "file://marketplace_template.zip"
+type = "unspecified"
+title = "Marketplace Template"
