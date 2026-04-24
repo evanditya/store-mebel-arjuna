@@ -122,7 +122,7 @@ def product_to_dict(product: Product) -> dict:
         "length": product.length or 10,
         "width": product.width or 10,
         "height": product.height or 10,
-        "primary_image": product.primary_image,
+        "primary_image": resolve_primary_image(product),
         "video_url": product.video_url,
         "images": [{"id": img.id, "image_url": img.image_url, "display_order": img.display_order} for img in product.images],
         "variants": [
@@ -162,6 +162,16 @@ def sync_product_stock(product: Product) -> None:
         product.stock = sum(v.stock or 0 for v in real_variants)
 
 
+def resolve_primary_image(product: Product) -> str:
+    """Return primary_image, falling back to first gallery image if primary is a local uploads path."""
+    pi = product.primary_image or ""
+    if pi.startswith("/uploads/") or not pi:
+        gallery = sorted(product.images, key=lambda i: i.display_order)
+        if gallery:
+            return gallery[0].image_url
+    return pi
+
+
 def product_to_list_dict(product: Product) -> dict:
     return {
         "name": product.name,
@@ -172,7 +182,7 @@ def product_to_list_dict(product: Product) -> dict:
         "sold_count": product.sold_count,
         "stock": effective_stock(product),
         "rating": product.rating,
-        "primary_image": product.primary_image,
+        "primary_image": resolve_primary_image(product),
         "variants": [
             {
                 "variant_type": v.variant_type,
@@ -196,15 +206,15 @@ async def list_products(
     limit: int = 20,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product).options(joinedload(Product.variants))
+    query = db.query(Product).options(joinedload(Product.variants), joinedload(Product.images))
     if category:
         query = query.filter(Product.category == category)
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
-    total = query.count()
+    total = query.distinct().count()
     page = max(1, page)
     limit = max(1, min(limit, 100))
-    products = query.offset((page - 1) * limit).limit(limit).all()
+    products = query.distinct().offset((page - 1) * limit).limit(limit).all()
     seller = load_seller_config()
     return {
         "products": [product_to_list_dict(p) for p in products],
