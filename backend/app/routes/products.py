@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
+import asyncio
+import threading
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Product, ProductImage, ProductVariant, gen_id
@@ -663,6 +665,7 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     import zipfile as zf_mod
+    from app.database import SessionLocal
 
     content = await file.read()
     try:
@@ -681,10 +684,11 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
     products_list = raw.get("products", [])
     uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
-
     zip_names = set(zfile.namelist())
-    created = updated = 0
-    errors = []
+    total = len(products_list)
+
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
 
     def _parse_price(val: str) -> float:
         cleaned = re.sub(r"[^\d]", "", str(val))
@@ -692,126 +696,141 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
 
     def _parse_sold(val: str) -> int:
         m = re.search(r"[\d.]+", str(val))
-        if not m:
-            return 0
-        return int(m.group().replace(".", ""))
+        return int(m.group().replace(".", "")) if m else 0
 
-    for idx, p in enumerate(products_list):
+    def worker():
+        db_w = SessionLocal()
+        created = updated = 0
+        errors = []
         try:
-            name = p.get("name", "").strip()
-            if not name:
-                continue
+            for idx, p in enumerate(products_list):
+                try:
+                    name = p.get("name", "").strip()
+                    if not name:
+                        continue
 
-            product_url = p.get("product_url", "")
-            m = re.search(r"(i\.\d+\.\d+)", product_url)
-            shopee_id = m.group(1) if m else ""
+                    product_url = p.get("product_url", "")
+                    m = re.search(r"(i\.\d+\.\d+)", product_url)
+                    shopee_id = m.group(1) if m else ""
 
-            price = _parse_price(p.get("price", "0"))
-            sold = _parse_sold(p.get("sold", "0"))
-            stock_raw = p.get("stock", 0)
-            stock = int(stock_raw) if stock_raw else 0
-            category_raw = p.get("category", "") or ""
-            category = category_raw.split(">")[-1].strip() if category_raw else None
+                    price = _parse_price(p.get("price", "0"))
+                    sold = _parse_sold(p.get("sold", "0"))
+                    stock = int(p.get("stock", 0) or 0)
+                    category_raw = p.get("category", "") or ""
+                    category = category_raw.split(">")[-1].strip() if category_raw else None
 
-            product = None
-            if shopee_id:
-                product = db.query(Product).filter(Product.shopee_url == shopee_id).first()
-            if product is None:
-                product = db.query(Product).filter(Product.name == name).first()
+                    product = None
+                    if shopee_id:
+                        product = db_w.query(Product).filter(Product.shopee_url == shopee_id).first()
+                    if product is None:
+                        product = db_w.query(Product).filter(Product.name == name).first()
 
-            is_new = product is None
-            if is_new:
-                product = Product(id=gen_id())
-                base_slug = generate_slug(name)
-                while db.query(Product).filter(Product.slug == base_slug).first():
-                    base_slug = generate_slug(name)
-                product.slug = base_slug
-                product.weight = 500
-                product.length = 10
-                product.width = 10
-                product.height = 10
+                    is_new = product is None
+                    if is_new:
+                        product = Product(id=gen_id())
+                        base_slug = generate_slug(name)
+                        while db_w.query(Product).filter(Product.slug == base_slug).first():
+                            base_slug = generate_slug(name)
+                        product.slug = base_slug
+                        product.weight = 500
+                        product.length = product.width = product.height = 10
 
-            product.name = name
-            product.price = price
-            product.description = p.get("description", "") or ""
-            product.category = category
-            product.sold_count = sold
-            product.shopee_url = shopee_id or (product.shopee_url if not is_new else "")
+                    product.name = name
+                    product.price = price
+                    product.description = p.get("description", "") or ""
+                    product.category = category
+                    product.sold_count = sold
+                    product.shopee_url = shopee_id or (product.shopee_url if not is_new else "")
 
-            video_list = p.get("all_videos", []) or []
-            if video_list:
-                first_vid = video_list[0]
-                product.video_url = first_vid if isinstance(first_vid, str) else first_vid.get("url", "")
+                    video_list = p.get("all_videos", []) or []
+                    if video_list:
+                        fv = video_list[0]
+                        product.video_url = fv if isinstance(fv, str) else fv.get("url", "")
 
-            thumb_key = f"images/product_{idx}_thumb.jpg"
-            if thumb_key in zip_names:
-                safe_id = re.sub(r"[^a-z0-9]", "_", shopee_id.lower()) if shopee_id else str(idx)
-                thumb_fn = f"sync_{safe_id}_thumb.jpg"
-                with open(os.path.join(uploads_dir, thumb_fn), "wb") as fout:
-                    fout.write(zfile.read(thumb_key))
-                product.primary_image = f"/uploads/{thumb_fn}"
+                    thumb_key = f"images/product_{idx}_thumb.jpg"
+                    if thumb_key in zip_names:
+                        safe_id = re.sub(r"[^a-z0-9]", "_", shopee_id.lower()) if shopee_id else str(idx)
+                        thumb_fn = f"sync_{safe_id}_thumb.jpg"
+                        with open(os.path.join(uploads_dir, thumb_fn), "wb") as fout:
+                            fout.write(zfile.read(thumb_key))
+                        product.primary_image = f"/uploads/{thumb_fn}"
 
-            if is_new:
-                db.add(product)
-                db.flush()
+                    if is_new:
+                        db_w.add(product)
+                        db_w.flush()
 
-            for v in list(product.variants):
-                db.delete(v)
-            db.flush()
+                    for v in list(product.variants):
+                        db_w.delete(v)
+                    db_w.flush()
 
-            variants_data = p.get("variants", []) or []
-            if variants_data:
-                for vgroup in variants_data:
-                    vtype = vgroup.get("type", "Pilihan")
-                    for opt in vgroup.get("options", []):
-                        v_price = _parse_price(opt.get("price", "0")) or price
-                        db.add(ProductVariant(
-                            id=gen_id(),
-                            product_id=product.id,
-                            variant_type=vtype,
-                            variant_name=opt.get("name", ""),
-                            price=v_price,
-                            stock=int(opt.get("stock", 0)),
-                            is_available=bool(opt.get("available", True)),
-                        ))
-                db.flush()
-                sync_product_stock(product)
-            else:
-                product.stock = stock
+                    variants_data = p.get("variants", []) or []
+                    if variants_data:
+                        for vgroup in variants_data:
+                            vtype = vgroup.get("type", "Pilihan")
+                            for opt in vgroup.get("options", []):
+                                v_price = _parse_price(opt.get("price", "0")) or price
+                                db_w.add(ProductVariant(
+                                    id=gen_id(), product_id=product.id,
+                                    variant_type=vtype, variant_name=opt.get("name", ""),
+                                    price=v_price, stock=int(opt.get("stock", 0)),
+                                    is_available=bool(opt.get("available", True)),
+                                ))
+                        db_w.flush()
+                        sync_product_stock(product)
+                    else:
+                        product.stock = stock
 
-            for img in list(product.images):
-                db.delete(img)
-            db.flush()
+                    for img in list(product.images):
+                        db_w.delete(img)
+                    db_w.flush()
 
-            for img_idx, img in enumerate(p.get("all_images", []) or []):
-                img_url = img.get("url", "") if isinstance(img, dict) else str(img)
-                if img_url:
-                    db.add(ProductImage(
-                        id=gen_id(),
-                        product_id=product.id,
-                        image_url=img_url,
-                        display_order=img_idx,
-                    ))
+                    for img_idx, img in enumerate(p.get("all_images", []) or []):
+                        img_url = img.get("url", "") if isinstance(img, dict) else str(img)
+                        if img_url:
+                            db_w.add(ProductImage(
+                                id=gen_id(), product_id=product.id,
+                                image_url=img_url, display_order=img_idx,
+                            ))
 
-            if is_new:
-                created += 1
-            else:
-                updated += 1
+                    if is_new:
+                        created += 1
+                    else:
+                        updated += 1
 
+                    if (idx + 1) % 20 == 0:
+                        db_w.commit()
+
+                except Exception as exc:
+                    errors.append(f"{p.get('name','?')[:40]}: {str(exc)[:80]}")
+
+                if (idx + 1) % 5 == 0 or idx == total - 1:
+                    loop.call_soon_threadsafe(queue.put_nowait, {
+                        "processed": idx + 1, "total": total,
+                        "created": created, "updated": updated,
+                        "done": False,
+                    })
+
+            db_w.commit()
+            loop.call_soon_threadsafe(queue.put_nowait, {
+                "processed": total, "total": total,
+                "created": created, "updated": updated,
+                "skipped_errors": len(errors), "errors": errors[:10],
+                "done": True, "success": True,
+            })
         except Exception as exc:
-            errors.append(f"{p.get('name', '?')[:40]}: {str(exc)[:80]}")
+            db_w.rollback()
+            loop.call_soon_threadsafe(queue.put_nowait, {"error": str(exc), "done": True})
+        finally:
+            db_w.close()
 
-    try:
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        return JSONResponse({"error": f"Gagal menyimpan: {str(exc)}"}, status_code=500)
+    threading.Thread(target=worker, daemon=True).start()
 
-    return {
-        "success": True,
-        "total": len(products_list),
-        "created": created,
-        "updated": updated,
-        "skipped_errors": len(errors),
-        "errors": errors[:10],
-    }
+    async def generate():
+        while True:
+            item = await queue.get()
+            yield f"data: {json.dumps(item)}\n\n"
+            if item.get("done"):
+                break
+
+    return StreamingResponse(generate(), media_type="text/event-stream",
+                             headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})

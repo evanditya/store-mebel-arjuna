@@ -186,6 +186,7 @@ export default function SellerDashboard() {
   const excelInputRef = useRef<HTMLInputElement>(null);
   const syncZipRef = useRef<HTMLInputElement>(null);
   const [syncZipLoading, setSyncZipLoading] = useState(false);
+  const [syncZipProgress, setSyncZipProgress] = useState<{ processed: number; total: number; created: number; updated: number } | null>(null);
   const [syncZipResult, setSyncZipResult] = useState<{ success: boolean; total?: number; created?: number; updated?: number; skipped_errors?: number; errors?: string[]; error?: string } | null>(null);
   const productMounted = useRef(false);
 
@@ -1247,16 +1248,40 @@ export default function SellerDashboard() {
                     if (!f) return;
                     setSyncZipLoading(true);
                     setSyncZipResult(null);
+                    setSyncZipProgress(null);
                     const fd = new FormData();
                     fd.append("file", f);
                     try {
                       const res = await fetch("/api/products/sync-zip", { method: "POST", body: fd });
-                      const data = await res.json();
-                      setSyncZipResult(data);
-                    } catch {
-                      setSyncZipResult({ success: false, error: "Terjadi kesalahan jaringan" });
+                      if (!res.ok || !res.body) {
+                        const data = await res.json().catch(() => ({}));
+                        setSyncZipResult({ success: false, error: data.error || "Gagal menghubungi server" });
+                        return;
+                      }
+                      const reader = res.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buf = "";
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        const lines = buf.split("\n");
+                        buf = lines.pop() || "";
+                        for (const line of lines) {
+                          if (!line.startsWith("data: ")) continue;
+                          try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.error) { setSyncZipResult({ success: false, error: data.error }); return; }
+                            if (!data.done) setSyncZipProgress({ processed: data.processed, total: data.total, created: data.created, updated: data.updated });
+                            if (data.done) setSyncZipResult({ success: true, total: data.total, created: data.created, updated: data.updated, skipped_errors: data.skipped_errors, errors: data.errors });
+                          } catch { /* skip malformed line */ }
+                        }
+                      }
+                    } catch (err) {
+                      setSyncZipResult({ success: false, error: "Koneksi terputus: " + String(err) });
                     } finally {
                       setSyncZipLoading(false);
+                      setSyncZipProgress(null);
                       if (syncZipRef.current) syncZipRef.current.value = "";
                     }
                   }}
@@ -1276,10 +1301,32 @@ export default function SellerDashboard() {
                     </>
                   ) : "Upload & Sinkronisasi ZIP"}
                 </button>
-                {syncZipLoading && (
-                  <p className="text-sm text-gray-500">Sedang memproses produk, mohon tunggu...</p>
-                )}
               </div>
+
+              {syncZipLoading && (
+                <div className="mt-4">
+                  {syncZipProgress ? (
+                    <>
+                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Memproses produk {syncZipProgress.processed} dari {syncZipProgress.total}...</span>
+                        <span>{Math.round((syncZipProgress.processed / syncZipProgress.total) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div
+                          className="bg-gray-900 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.round((syncZipProgress.processed / syncZipProgress.total) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                        <span>Diperbarui: <strong className="text-gray-800">{syncZipProgress.updated}</strong></span>
+                        <span>Baru: <strong className="text-gray-800">{syncZipProgress.created}</strong></span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500">Mengunggah file, mohon tunggu...</p>
+                  )}
+                </div>
+              )}
 
               {syncZipResult && (
                 <div className={`mt-4 rounded-lg p-4 text-sm border ${syncZipResult.success ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>

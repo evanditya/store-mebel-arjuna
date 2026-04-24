@@ -21,16 +21,35 @@ export async function POST(request: Request) {
     };
 
     const backendReq = http.request(options, (backendRes) => {
-      let body = "";
-      backendRes.on("data", (chunk) => (body += chunk));
-      backendRes.on("end", () => {
-        try {
-          const json = JSON.parse(body);
-          resolve(Response.json(json, { status: backendRes.statusCode ?? 200 }));
-        } catch {
-          resolve(Response.json({ error: body }, { status: backendRes.statusCode ?? 500 }));
-        }
-      });
+      const isSSE = (backendRes.headers["content-type"] || "").includes("text/event-stream");
+
+      if (isSSE) {
+        const stream = new ReadableStream({
+          start(controller) {
+            backendRes.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+            backendRes.on("end", () => controller.close());
+            backendRes.on("error", (err) => controller.error(err));
+          },
+        });
+        resolve(new Response(stream, {
+          status: backendRes.statusCode ?? 200,
+          headers: {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            "x-accel-buffering": "no",
+          },
+        }));
+      } else {
+        let body = "";
+        backendRes.on("data", (chunk: Buffer) => (body += chunk.toString()));
+        backendRes.on("end", () => {
+          try {
+            resolve(Response.json(JSON.parse(body), { status: backendRes.statusCode ?? 200 }));
+          } catch {
+            resolve(Response.json({ error: body }, { status: backendRes.statusCode ?? 500 }));
+          }
+        });
+      }
     });
 
     backendReq.on("error", (err) => {
