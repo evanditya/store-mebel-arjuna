@@ -1,24 +1,60 @@
+import http from "http";
+
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const cookie = request.headers.get("cookie") || "";
   const contentType = request.headers.get("content-type") || "";
+  const contentLength = request.headers.get("content-length") || "";
 
-  try {
-    const backendRes = await fetch("http://127.0.0.1:8000/api/products/sync-zip", {
+  return new Promise<Response>((resolve) => {
+    const options: http.RequestOptions = {
+      hostname: "127.0.0.1",
+      port: 8000,
+      path: "/api/products/sync-zip",
       method: "POST",
       headers: {
         "content-type": contentType,
         cookie,
+        ...(contentLength ? { "content-length": contentLength } : {}),
       },
-      body: request.body,
-      // @ts-ignore
-      duplex: "half",
+    };
+
+    const backendReq = http.request(options, (backendRes) => {
+      let body = "";
+      backendRes.on("data", (chunk) => (body += chunk));
+      backendRes.on("end", () => {
+        try {
+          const json = JSON.parse(body);
+          resolve(Response.json(json, { status: backendRes.statusCode ?? 200 }));
+        } catch {
+          resolve(Response.json({ error: body }, { status: backendRes.statusCode ?? 500 }));
+        }
+      });
     });
 
-    const data = await backendRes.json();
-    return Response.json(data, { status: backendRes.status });
-  } catch (err) {
-    return Response.json({ error: "Gagal terhubung ke backend: " + String(err) }, { status: 500 });
-  }
+    backendReq.on("error", (err) => {
+      resolve(Response.json({ error: "Backend tidak dapat dihubungi: " + err.message }, { status: 502 }));
+    });
+
+    if (request.body) {
+      const reader = request.body.getReader();
+      const pump = () => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            backendReq.end();
+          } else {
+            backendReq.write(Buffer.from(value));
+            pump();
+          }
+        }).catch((err) => {
+          backendReq.destroy(err);
+          resolve(Response.json({ error: "Gagal membaca file: " + err.message }, { status: 500 }));
+        });
+      };
+      pump();
+    } else {
+      backendReq.end();
+    }
+  });
 }
