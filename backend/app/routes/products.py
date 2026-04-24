@@ -655,6 +655,163 @@ async def delete_product(slug: str, request: Request, db: Session = Depends(get_
     db.commit()
     return {"success": True}
 
-    parts = []
-    for v in variants:
-        harga = str(int(v.price)) if v.price is not None else ""
+
+@router.post("/products/sync-zip")
+async def sync_products_zip(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not has_perm(user, "products"):
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+
+    import zipfile as zf_mod
+
+    content = await file.read()
+    try:
+        zfile = zf_mod.ZipFile(io.BytesIO(content))
+    except Exception:
+        return JSONResponse({"error": "File bukan zip yang valid"}, status_code=400)
+
+    if "products.json" not in zfile.namelist():
+        return JSONResponse({"error": "products.json tidak ditemukan dalam zip"}, status_code=400)
+
+    try:
+        raw = json.loads(zfile.read("products.json"))
+    except Exception:
+        return JSONResponse({"error": "products.json tidak bisa dibaca"}, status_code=400)
+
+    products_list = raw.get("products", [])
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    zip_names = set(zfile.namelist())
+    created = updated = 0
+    errors = []
+
+    def _parse_price(val: str) -> float:
+        cleaned = re.sub(r"[^\d]", "", str(val))
+        return float(cleaned) if cleaned else 0.0
+
+    def _parse_sold(val: str) -> int:
+        m = re.search(r"[\d.]+", str(val))
+        if not m:
+            return 0
+        return int(m.group().replace(".", ""))
+
+    for idx, p in enumerate(products_list):
+        try:
+            name = p.get("name", "").strip()
+            if not name:
+                continue
+
+            product_url = p.get("product_url", "")
+            m = re.search(r"(i\.\d+\.\d+)", product_url)
+            shopee_id = m.group(1) if m else ""
+
+            price = _parse_price(p.get("price", "0"))
+            sold = _parse_sold(p.get("sold", "0"))
+            stock_raw = p.get("stock", 0)
+            stock = int(stock_raw) if stock_raw else 0
+            category_raw = p.get("category", "") or ""
+            category = category_raw.split(">")[-1].strip() if category_raw else None
+
+            product = None
+            if shopee_id:
+                product = db.query(Product).filter(Product.shopee_url == shopee_id).first()
+            if product is None:
+                product = db.query(Product).filter(Product.name == name).first()
+
+            is_new = product is None
+            if is_new:
+                product = Product(id=gen_id())
+                base_slug = generate_slug(name)
+                while db.query(Product).filter(Product.slug == base_slug).first():
+                    base_slug = generate_slug(name)
+                product.slug = base_slug
+                product.weight = 500
+                product.length = 10
+                product.width = 10
+                product.height = 10
+
+            product.name = name
+            product.price = price
+            product.description = p.get("description", "") or ""
+            product.category = category
+            product.sold_count = sold
+            product.shopee_url = shopee_id or (product.shopee_url if not is_new else "")
+
+            video_list = p.get("all_videos", []) or []
+            if video_list:
+                first_vid = video_list[0]
+                product.video_url = first_vid if isinstance(first_vid, str) else first_vid.get("url", "")
+
+            thumb_key = f"images/product_{idx}_thumb.jpg"
+            if thumb_key in zip_names:
+                safe_id = re.sub(r"[^a-z0-9]", "_", shopee_id.lower()) if shopee_id else str(idx)
+                thumb_fn = f"sync_{safe_id}_thumb.jpg"
+                with open(os.path.join(uploads_dir, thumb_fn), "wb") as fout:
+                    fout.write(zfile.read(thumb_key))
+                product.primary_image = f"/uploads/{thumb_fn}"
+
+            if is_new:
+                db.add(product)
+                db.flush()
+
+            for v in list(product.variants):
+                db.delete(v)
+            db.flush()
+
+            variants_data = p.get("variants", []) or []
+            if variants_data:
+                for vgroup in variants_data:
+                    vtype = vgroup.get("type", "Pilihan")
+                    for opt in vgroup.get("options", []):
+                        v_price = _parse_price(opt.get("price", "0")) or price
+                        db.add(ProductVariant(
+                            id=gen_id(),
+                            product_id=product.id,
+                            variant_type=vtype,
+                            variant_name=opt.get("name", ""),
+                            price=v_price,
+                            stock=int(opt.get("stock", 0)),
+                            is_available=bool(opt.get("available", True)),
+                        ))
+                db.flush()
+                sync_product_stock(product)
+            else:
+                product.stock = stock
+
+            for img in list(product.images):
+                db.delete(img)
+            db.flush()
+
+            for img_idx, img in enumerate(p.get("all_images", []) or []):
+                img_url = img.get("url", "") if isinstance(img, dict) else str(img)
+                if img_url:
+                    db.add(ProductImage(
+                        id=gen_id(),
+                        product_id=product.id,
+                        image_url=img_url,
+                        display_order=img_idx,
+                    ))
+
+            if is_new:
+                created += 1
+            else:
+                updated += 1
+
+        except Exception as exc:
+            errors.append(f"{p.get('name', '?')[:40]}: {str(exc)[:80]}")
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse({"error": f"Gagal menyimpan: {str(exc)}"}, status_code=500)
+
+    return {
+        "success": True,
+        "total": len(products_list),
+        "created": created,
+        "updated": updated,
+        "skipped_errors": len(errors),
+        "errors": errors[:10],
+    }

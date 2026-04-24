@@ -184,6 +184,9 @@ export default function SellerDashboard() {
   const [excelImporting, setExcelImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ total: number; updated: number; skipped: number; detail?: { produk_diperbarui: number; produk_tidak_berubah: number; varian_diperbarui: number; varian_tidak_berubah: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
+  const syncZipRef = useRef<HTMLInputElement>(null);
+  const [syncZipLoading, setSyncZipLoading] = useState(false);
+  const [syncZipResult, setSyncZipResult] = useState<{ success: boolean; total?: number; created?: number; updated?: number; skipped_errors?: number; errors?: string[]; error?: string } | null>(null);
   const productMounted = useRef(false);
 
   const [shippingAvailable, setShippingAvailable] = useState(false);
@@ -1226,6 +1229,86 @@ export default function SellerDashboard() {
                 )}
               </div>
             )}
+
+            <div className="bg-white rounded-lg border p-6">
+              <h2 className="font-bold text-lg mb-1">Sinkronisasi Produk dari ZIP</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Upload file ZIP hasil scraping Shopee untuk memperbarui produk, varian, dan gambar secara otomatis.
+                Produk yang cocok (berdasarkan ID Shopee atau nama) akan diperbarui. Produk manual yang tidak ada di ZIP tidak akan tersentuh.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  ref={syncZipRef}
+                  type="file"
+                  accept=".zip"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setSyncZipLoading(true);
+                    setSyncZipResult(null);
+                    const fd = new FormData();
+                    fd.append("file", f);
+                    try {
+                      const res = await fetch("/api/products/sync-zip", { method: "POST", body: fd });
+                      const data = await res.json();
+                      setSyncZipResult(data);
+                    } catch {
+                      setSyncZipResult({ success: false, error: "Terjadi kesalahan jaringan" });
+                    } finally {
+                      setSyncZipLoading(false);
+                      if (syncZipRef.current) syncZipRef.current.value = "";
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => { setSyncZipResult(null); syncZipRef.current?.click(); }}
+                  disabled={syncZipLoading}
+                  className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {syncZipLoading ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Menyinkronkan...
+                    </>
+                  ) : "Upload & Sinkronisasi ZIP"}
+                </button>
+                {syncZipLoading && (
+                  <p className="text-sm text-gray-500">Sedang memproses produk, mohon tunggu...</p>
+                )}
+              </div>
+
+              {syncZipResult && (
+                <div className={`mt-4 rounded-lg p-4 text-sm border ${syncZipResult.success ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>
+                  {syncZipResult.success ? (
+                    <>
+                      <p className="font-semibold mb-1">Sinkronisasi selesai!</p>
+                      <ul className="space-y-0.5">
+                        <li>Total produk di ZIP: <strong>{syncZipResult.total}</strong></li>
+                        <li>Produk diperbarui: <strong>{syncZipResult.updated}</strong></li>
+                        <li>Produk baru ditambahkan: <strong>{syncZipResult.created}</strong></li>
+                        {(syncZipResult.skipped_errors ?? 0) > 0 && (
+                          <li className="text-amber-700">Gagal diproses: <strong>{syncZipResult.skipped_errors}</strong></li>
+                        )}
+                      </ul>
+                      {syncZipResult.errors && syncZipResult.errors.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs text-amber-700">Lihat detail error</summary>
+                          <ul className="mt-1 space-y-0.5 text-xs text-amber-800">
+                            {syncZipResult.errors.map((e, i) => <li key={i}>• {e}</li>)}
+                          </ul>
+                        </details>
+                      )}
+                    </>
+                  ) : (
+                    <p>{syncZipResult.error || "Sinkronisasi gagal"}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

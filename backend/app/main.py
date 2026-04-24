@@ -15,6 +15,10 @@ def _run_migrations():
         if "permissions" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
             conn.commit()
+        prod_cols = [c["name"] for c in inspector.get_columns("products")]
+        if "shopee_url" not in prod_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN shopee_url VARCHAR"))
+            conn.commit()
 
 
 @asynccontextmanager

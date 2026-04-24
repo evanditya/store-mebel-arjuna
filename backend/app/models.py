@@ -49,6 +49,7 @@ class Product(Base):
     height = Column(Integer, default=10)
     primary_image = Column(String, nullable=True)
     video_url = Column(String, nullable=True)
+    shopee_url = Column(String, nullable=True, index=True)
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
 
