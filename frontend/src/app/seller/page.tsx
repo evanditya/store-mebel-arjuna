@@ -1576,7 +1576,7 @@ export default function SellerDashboard() {
                                   className="border rounded-lg px-3 py-2 text-sm"
                                 >
                                   <option value="">— Semua varian —</option>
-                                  {selectedProduct.variants.map((v: { id: string; variant_name: string }) => (
+                                  {selectedProduct.variants.filter((v) => v.id).map((v) => (
                                     <option key={v.id} value={v.id}>{v.variant_name}</option>
                                   ))}
                                 </select>
