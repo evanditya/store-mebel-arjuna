@@ -45,7 +45,7 @@ def _imap_config() -> dict:
     return {
         "host": os.environ.get("IMAP_HOST", "imap.gmail.com"),
         "port": int(os.environ.get("IMAP_PORT", "993")),
-        "user": os.environ.get("IMAP_USER", ""),
+        "user": os.environ.get("IMAP_USER", "") or os.environ.get("EMAIL_USER", ""),
         "password": os.environ.get("IMAP_PASSWORD", "") or os.environ.get("EMAIL_PASSWORD", ""),
         "folder": os.environ.get("IMAP_FOLDER", "INBOX"),
     }
