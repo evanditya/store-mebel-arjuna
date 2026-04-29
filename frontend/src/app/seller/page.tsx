@@ -930,7 +930,7 @@ export default function SellerDashboard() {
                 ) : null}
 
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-400">{new Date(order.created_at).toLocaleDateString("id-ID")}</span>
+                  <span className="text-gray-400">{new Date(order.created_at).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}</span>
                   <div className="flex items-center gap-2">
                     {order.courier_service_name === "Ambil di Toko" && (order.status === "paid" || order.status === "processing") && (
                       <button onClick={() => handleStatusChange(order.id, "ready_pickup")} className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition" data-testid={`button-ready-pickup-${order.id}`}>
@@ -984,7 +984,7 @@ export default function SellerDashboard() {
                                 </div>
                                 <div className="pb-3">
                                   <p className="text-gray-800">{h.note || trackingStatusLabels[h.status] || h.status}</p>
-                                  {h.updated_at && <p className="text-xs text-gray-400 mt-0.5">{new Date(h.updated_at).toLocaleString("id-ID")}</p>}
+                                  {h.updated_at && <p className="text-xs text-gray-400 mt-0.5">{new Date(h.updated_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}</p>}
                                 </div>
                               </div>
                             ))}
@@ -1512,7 +1512,7 @@ export default function SellerDashboard() {
               <div className="text-xs text-gray-500 mb-4 space-y-0.5">
                 <div>Status daemon: <span className="font-medium text-gray-700">{shopeeStatus?.daemon.last_event || "-"}</span></div>
                 {shopeeStatus?.last_processed_at && (
-                  <div>Proses terakhir: <span className="font-medium text-gray-700">{new Date(shopeeStatus.last_processed_at).toLocaleString("id-ID")}</span></div>
+                  <div>Proses terakhir: <span className="font-medium text-gray-700">{new Date(shopeeStatus.last_processed_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}</span></div>
                 )}
                 {shopeeStatus?.daemon.last_error && (
                   <div className="text-red-600">Error terakhir: {shopeeStatus.daemon.last_error}</div>
@@ -1762,7 +1762,7 @@ export default function SellerDashboard() {
                             <div className="flex items-center gap-2">
                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{log.status}</span>
                               <span className="font-medium">#{log.shopee_order_no || "-"}</span>
-                              <span className="text-xs text-gray-500">{new Date(log.processed_at).toLocaleString("id-ID")}</span>
+                              <span className="text-xs text-gray-500">{new Date(log.processed_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}</span>
                             </div>
                             <span className="text-xs text-gray-600">−{log.total_decremented} stok</span>
                           </div>
