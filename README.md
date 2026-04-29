@@ -95,6 +95,15 @@ The Next.js frontend proxies `/api/*` and `/uploads/*` to the FastAPI backend.
 - Drag-and-drop banner manager with active/inactive toggle, titles, and redirect links
 - Pickup hours configuration (open/close times per day)
 
+**Shopee → Store Stock Sync** *(new)*
+- Watches the seller's Gmail inbox for Shopee Seller "Pesanan Telah Diterima Pembeli" emails and **automatically decrements matching product stock** when the buyer confirms receipt
+- Push trigger via IMAP IDLE (instant) with a 30-min fallback poll; reconnects every 28 min so Gmail keeps the channel open
+- Idempotent — each email is processed at most once (UNIQUE on Message-ID)
+- Smart matching: manual mapping table → exact case-insensitive product name → unmatched (logged for the seller to map)
+- Variant-aware: decrements `variant.stock` then re-sums into `product.stock`; never goes below zero
+- Admin UI at **Pengaturan → Sinkronisasi Shopee**: status badge, totals, "Sinkron Sekarang" button, sync history, unmatched-product mapping flow, and existing mappings list
+- Daemon is a **strict no-op** when `IMAP_USER` is not set (logs "IMAP not configured — daemon disabled")
+
 **Multi-Admin Role Management** *(new)*
 - Two staff roles:
   - **`seller`** — Super Admin (the owner): full access + ability to manage other admins
@@ -176,8 +185,15 @@ Change the password from the seller dashboard after first login.
 | `MIDTRANS_IS_PRODUCTION` | No | `false` | Use production Midtrans |
 | `BITESHIP_API_KEY` | Shipping | — | Biteship API key |
 | `JWT_SECRET` | **Yes** | — | JWT signing secret (use a long random string) |
+| `IMAP_USER` | Shopee sync | — | Gmail address that receives Shopee Seller emails |
+| `IMAP_PASSWORD` | Shopee sync | — | Gmail **App Password** (not the regular Gmail password) |
+| `IMAP_HOST` | No | `imap.gmail.com` | IMAP server hostname |
+| `IMAP_PORT` | No | `993` | IMAP server port |
+| `IMAP_FOLDER` | No | `INBOX` | Mailbox folder to watch |
 | `PORT` | No | `5000` | Frontend port |
 | `BACKEND_PORT` | No | `8000` | Backend port |
+
+> **Gmail App Password** — Generate one at *myaccount.google.com → Security → 2-Step Verification → App passwords*. Without `IMAP_USER` set, the Shopee sync daemon stays disabled and the rest of the app continues to work normally.
 
 > **Security note:** Always set `JWT_SECRET` via Secrets — never hardcode it in `.replit` or commit it.
 
