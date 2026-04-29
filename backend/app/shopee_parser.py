@@ -70,8 +70,8 @@ def parse_shopee_delivered_email(html_body: str, subject: str = "") -> dict:
         var_el = row.select_one(".product-variant")
         if var_el:
             v = _clean_text(var_el.get_text())
-            # Strip leading "Variasi:" or "Variation:"
-            v = re.sub(r"^(Variasi|Variation)\s*:\s*", "", v, flags=re.IGNORECASE)
+            # Strip leading "Variasi:" / "Variasi " / "Variation:" / "Variation " (colon optional)
+            v = re.sub(r"^(Variasi|Variation)\s*:?\s*", "", v, flags=re.IGNORECASE)
             variant = v
 
         qty = 1
