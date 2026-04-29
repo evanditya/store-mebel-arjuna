@@ -214,6 +214,7 @@ export default function SellerDashboard() {
     pickup_enabled: false,
     pickup_open: "08:00",
     pickup_close: "17:00",
+    notification_email: "",
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
@@ -367,6 +368,7 @@ export default function SellerDashboard() {
         pickup_enabled: data.pickup_enabled || false,
         pickup_open: data.pickup_open_time || "08:00",
         pickup_close: data.pickup_close_time || "17:00",
+        notification_email: data.notification_email || "",
       });
     }).catch(() => {});
     loadBanners();
@@ -410,6 +412,7 @@ export default function SellerDashboard() {
           pickup_enabled: brandingForm.pickup_enabled,
           pickup_open_time: brandingForm.pickup_open,
           pickup_close_time: brandingForm.pickup_close,
+          notification_email: brandingForm.notification_email,
         }),
       });
       if (res.ok) {
@@ -1178,6 +1181,41 @@ export default function SellerDashboard() {
                   </button>
                   {pickupMsg && (
                     <span className={`text-sm ${pickupMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{pickupMsg}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border p-6">
+              <h2 className="font-bold text-lg mb-1">Notifikasi Email Penjual</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Email ini akan menerima notifikasi otomatis saat pesanan diterima pembeli (status: selesai). Format email mengikuti format Shopee agar parser stok otomatis dapat membacanya.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Alamat email notifikasi</label>
+                  <input
+                    type="email"
+                    value={brandingForm.notification_email}
+                    onChange={(e) => setBrandingForm((p) => ({ ...p, notification_email: e.target.value }))}
+                    placeholder="contoh: stok@tokomu.com"
+                    className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Kosongkan jika tidak ingin menerima email notifikasi penjual.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={saveBranding}
+                    disabled={brandingSaving}
+                    className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                  >
+                    {brandingSaving ? "Menyimpan..." : "Simpan Email Notifikasi"}
+                  </button>
+                  {brandingMsg && (
+                    <span className={`text-sm ${brandingMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{brandingMsg}</span>
                   )}
                 </div>
               </div>

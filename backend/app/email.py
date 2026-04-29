@@ -91,23 +91,48 @@ def _format_idr(amount: float) -> str:
 import types as _types
 
 
-def snapshot_item(item) -> object:
+def snapshot_item(item, image_url: str = "") -> object:
     return _types.SimpleNamespace(
         product_name=item.product_name or "",
         variant_name=item.variant_name or "",
         price=float(item.price or 0),
         quantity=int(item.quantity or 1),
         weight=int(item.weight or 500),
+        image_url=image_url or "",
     )
+
+
+def snapshot_items_with_images(items, db) -> list:
+    """Snapshot order items, enriching each with the product's primary_image when possible."""
+    from app.models import Product
+    from app.routes.products import resolve_primary_image
+    out = []
+    for it in items:
+        url = ""
+        try:
+            if it.product_id:
+                p = db.query(Product).filter(Product.id == it.product_id).first()
+                if p:
+                    url = resolve_primary_image(p) or ""
+        except Exception:
+            url = ""
+        out.append(snapshot_item(it, image_url=url))
+    return out
 
 
 def snapshot_order(order, items=None) -> object:
     """
     Snapshot an ORM Order into a plain object.
     Pass `items` explicitly when the relationship is not yet loaded
-    (e.g. right after create_order where items are built from raw dicts).
+    (e.g. right after create_order where items are built from raw dicts),
+    or when items have already been snapshotted with extra fields like image_url.
     """
-    loaded_items = items if items is not None else list(order.items)
+    if items is not None:
+        # If items are already snapshot SimpleNamespace objects, keep them as-is
+        # to preserve fields like image_url. Otherwise re-snapshot.
+        snapped = [i if isinstance(i, _types.SimpleNamespace) else snapshot_item(i) for i in items]
+    else:
+        snapped = [snapshot_item(i) for i in list(order.items)]
     return _types.SimpleNamespace(
         id=order.id,
         total=float(order.total or 0),
@@ -121,7 +146,7 @@ def snapshot_order(order, items=None) -> object:
         shipping_etd=order.shipping_etd or "",
         waybill_id=order.waybill_id or "",
         tracking_url=order.tracking_url or "",
-        items=[snapshot_item(i) for i in loaded_items],
+        items=snapped,
     )
 
 
@@ -345,3 +370,133 @@ def send_order_completed_email(order, user, seller_name: str = "Toko Online") ->
     """
     html = _base_template(content, seller_name)
     return _send_email(user.email, subject, html)
+
+
+def _shopee_items_html(items: list, base_url: str = "") -> str:
+    rows = ""
+    for it in items:
+        variant_name = getattr(it, "variant_name", "") or ""
+        image_url = getattr(it, "image_url", "") or ""
+        variant = f'<div class="product-variant">Variasi: {variant_name}</div>' if variant_name else ""
+        if image_url:
+            img_src = image_url if image_url.startswith("http") else f"{base_url}{image_url}"
+            img_html = f'<img src="{img_src}" alt="" class="product-thumb" />'
+        else:
+            img_html = '<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="4" fill="#F0F0F0"/><rect x="8" y="11" width="16" height="10" rx="2" fill="#BDBDBD"/></svg>'
+        rows += f"""
+        <div class="product-row">
+          <div class="product-img">{img_html}</div>
+          <div class="product-detail">
+            <div class="product-name">{it.product_name}</div>
+            {variant}
+          </div>
+          <div class="product-side">
+            <div class="product-price">{_format_idr(it.price * it.quantity)}</div>
+            <div class="product-qty">x{it.quantity}</div>
+          </div>
+        </div>"""
+    return rows
+
+
+def send_seller_order_delivered_email(order, buyer, seller_name: str, seller_email: str, base_url: str = "") -> bool:
+    """
+    Email notifikasi ke email seller saat pesanan diterima pembeli.
+    Mengikuti format Shopee Seller agar mudah diparsing oleh sistem stok seller.
+    """
+    if not seller_email:
+        print(f"[Email] Skipping seller delivered email — notification_email kosong")
+        return False
+
+    short_id = order.id[:8].upper()
+    order_no = f"#{short_id}"
+    subject = f"[{seller_name} Seller] Pesanan {order_no} Telah Diterima Pembeli"
+
+    items_total = sum(it.price * it.quantity for it in order.items)
+    shipping_cost = float(order.shipping_cost or 0)
+    discount = 0.0
+    payment_method = "Midtrans" if getattr(order, "midtrans_order_id", None) else "Transfer / COD"
+
+    from datetime import datetime as _dt
+    now_str = _dt.now().strftime("%d %B %Y, %H:%M WIB")
+    items_html = _shopee_items_html(order.items, base_url=base_url)
+    courier_full = f"{(order.courier_company or '').upper()} {order.courier_service_name or ''}".strip() or "-"
+    waybill = order.waybill_id or "-"
+    recipient = order.destination_contact_name or buyer.name or "-"
+    address = order.shipping_address or "-"
+
+    html = f"""<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"/><style>
+body {{ font-family: Arial, Helvetica, sans-serif; background:#f5f5f5; margin:0; padding:0; color:#222; }}
+.email-wrap {{ max-width:600px; margin:24px auto; }}
+.email-shell {{ background:#fff; border:1px solid #e5e5e5; border-radius:8px; overflow:hidden; }}
+.shopee-header {{ background:#EE4D2D; padding:20px 24px 16px; }}
+.shopee-logo-text {{ color:#fff; font-size:22px; font-weight:500; letter-spacing:1px; }}
+.shopee-subheader {{ color:rgba(255,255,255,0.85); font-size:12px; margin-top:2px; }}
+.email-body {{ padding:24px; background:#fff; }}
+.status-badge {{ display:inline-block; background:#FFF0EB; color:#C13515; border-radius:20px; padding:6px 14px; font-size:13px; font-weight:500; margin-bottom:16px; border:1px solid #F0C8BA; }}
+.greeting {{ font-size:15px; color:#222; margin-bottom:4px; font-weight:500; }}
+.subtext {{ font-size:13px; color:#666; margin-bottom:20px; line-height:1.6; }}
+.section-label {{ font-size:11px; font-weight:600; color:#666; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; margin-top:16px; }}
+.info-card {{ background:#fafafa; border-radius:8px; border:1px solid #eee; padding:14px 16px; margin-bottom:16px; }}
+.info-row {{ display:flex; justify-content:space-between; align-items:flex-start; padding:6px 0; font-size:13px; gap:12px; }}
+.info-row + .info-row {{ border-top:1px solid #eee; }}
+.info-key {{ color:#666; flex-shrink:0; }}
+.info-val {{ color:#222; text-align:right; }}
+.product-row {{ display:flex; gap:12px; align-items:flex-start; padding:12px 0; }}
+.product-row + .product-row {{ border-top:1px solid #eee; }}
+.product-img {{ width:56px; height:56px; border-radius:8px; background:#f5f5f5; border:1px solid #eee; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }}
+.product-thumb {{ width:100%; height:100%; object-fit:cover; }}
+.product-detail {{ flex:1; min-width:0; }}
+.product-name {{ font-size:13px; color:#222; font-weight:500; margin-bottom:2px; }}
+.product-variant {{ font-size:12px; color:#666; }}
+.product-side {{ text-align:right; white-space:nowrap; }}
+.product-price {{ font-size:13px; color:#222; }}
+.product-qty {{ font-size:12px; color:#666; }}
+.total-row {{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; font-size:13px; }}
+.total-row.grand {{ border-top:1px solid #eee; margin-top:4px; padding-top:12px; }}
+.grand .total-label {{ font-weight:600; font-size:14px; color:#222; }}
+.grand .total-val {{ font-weight:600; font-size:14px; color:#EE4D2D; }}
+.footer {{ background:#fafafa; border-top:1px solid #eee; padding:16px 24px; font-size:11px; color:#666; line-height:1.6; text-align:center; }}
+.mono {{ font-family: Menlo, Consolas, monospace; font-size:12px; }}
+</style></head><body>
+<div class="email-wrap"><div class="email-shell">
+  <div class="shopee-header">
+    <div class="shopee-logo-text">{seller_name}</div>
+    <div class="shopee-subheader">Notifikasi Toko — {seller_name} Seller</div>
+  </div>
+  <div class="email-body">
+    <div class="status-badge">● Pesanan Selesai</div>
+    <div class="greeting">Halo, {seller_name}!</div>
+    <div class="subtext">Pembeli telah mengkonfirmasi bahwa pesanan berikut sudah diterima.</div>
+
+    <div class="section-label">Detail Pesanan</div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-key">No. Pesanan</span><span class="info-val mono">{order_no}</span></div>
+      <div class="info-row"><span class="info-key">Tanggal Diterima</span><span class="info-val">{now_str}</span></div>
+      <div class="info-row"><span class="info-key">Metode Pembayaran</span><span class="info-val">{payment_method}</span></div>
+      <div class="info-row"><span class="info-key">Pembeli</span><span class="info-val">{buyer.name} &lt;{buyer.email}&gt;</span></div>
+    </div>
+
+    <div class="section-label">Produk</div>
+    <div class="info-card">{items_html}</div>
+
+    <div class="info-card">
+      <div class="total-row"><span class="info-key">Subtotal Produk</span><span class="info-val">{_format_idr(items_total)}</span></div>
+      <div class="total-row"><span class="info-key">Ongkos Kirim ({courier_full})</span><span class="info-val">{_format_idr(shipping_cost)}</span></div>
+      <div class="total-row grand"><span class="total-label">Total Pesanan</span><span class="total-val">{_format_idr(order.total)}</span></div>
+    </div>
+
+    <div class="section-label">Informasi Pengiriman</div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-key">Kurir</span><span class="info-val">{courier_full}</span></div>
+      <div class="info-row"><span class="info-key">No. Resi</span><span class="info-val mono">{waybill}</span></div>
+      <div class="info-row"><span class="info-key">Penerima</span><span class="info-val">{recipient}</span></div>
+      <div class="info-row"><span class="info-key">Alamat</span><span class="info-val" style="max-width:260px">{address}</span></div>
+    </div>
+  </div>
+  <div class="footer">
+    Email ini dikirim otomatis oleh sistem {seller_name}. Mohon tidak membalas email ini.<br>
+    © {_dt.now().year} {seller_name}.
+  </div>
+</div></div></body></html>"""
+    return _send_email(seller_email, subject, html)

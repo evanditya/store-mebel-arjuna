@@ -1,0 +1,151 @@
+
+<style>
+  .email-wrap { max-width: 600px; margin: 1rem auto; font-family: var(--font-sans); }
+  .email-shell { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
+  .email-meta { background: var(--color-background-secondary); border-bottom: 0.5px solid var(--color-border-tertiary); padding: 14px 20px; font-size: 12px; color: var(--color-text-secondary); }
+  .email-meta span { color: var(--color-text-primary); font-weight: 500; }
+  .shopee-header { background: #EE4D2D; padding: 20px 24px 16px; }
+  .shopee-header img { height: 28px; }
+  .shopee-logo-text { color: #fff; font-size: 22px; font-weight: 500; letter-spacing: 1px; }
+  .shopee-subheader { color: rgba(255,255,255,0.85); font-size: 12px; margin-top: 2px; }
+  .email-body { padding: 24px; }
+  .status-badge { display: inline-flex; align-items: center; gap: 6px; background: #FFF0EB; color: #C13515; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; margin-bottom: 16px; border: 0.5px solid #F0C8BA; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #EE4D2D; }
+  .greeting { font-size: 15px; color: var(--color-text-primary); margin-bottom: 4px; font-weight: 500; }
+  .subtext { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 20px; line-height: 1.6; }
+  .section-label { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .info-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); padding: 14px 16px; margin-bottom: 16px; }
+  .info-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 5px 0; font-size: 13px; gap: 12px; }
+  .info-row:not(:last-child) { border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .info-key { color: var(--color-text-secondary); flex-shrink: 0; }
+  .info-val { color: var(--color-text-primary); text-align: right; }
+  .product-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; }
+  .product-row:not(:last-child) { border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .product-img { width: 56px; height: 56px; border-radius: 8px; background: #F5F5F5; border: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+  .product-thumb { width: 100%; height: 100%; object-fit: cover; }
+  .product-detail { flex: 1; min-width: 0; }
+  .product-name { font-size: 13px; color: var(--color-text-primary); font-weight: 500; margin-bottom: 2px; }
+  .product-variant { font-size: 12px; color: var(--color-text-secondary); }
+  .product-price { font-size: 13px; color: var(--color-text-primary); text-align: right; white-space: nowrap; }
+  .product-qty { font-size: 12px; color: var(--color-text-secondary); text-align: right; }
+  .total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 13px; }
+  .total-row.grand { border-top: 1px solid var(--color-border-tertiary); margin-top: 4px; padding-top: 12px; }
+  .total-label { color: var(--color-text-secondary); }
+  .total-val { color: var(--color-text-primary); }
+  .grand .total-label { font-weight: 500; font-size: 14px; color: var(--color-text-primary); }
+  .grand .total-val { font-weight: 500; font-size: 14px; color: #EE4D2D; }
+  .divider { height: 0.5px; background: var(--color-border-tertiary); margin: 20px 0; }
+  .cta-btn { display: block; width: 100%; background: #EE4D2D; color: #fff; text-align: center; padding: 12px; border-radius: var(--border-radius-md); font-size: 14px; font-weight: 500; text-decoration: none; margin-top: 4px; cursor: pointer; border: none; }
+  .footer { background: var(--color-background-secondary); border-top: 0.5px solid var(--color-border-tertiary); padding: 16px 24px; font-size: 11px; color: var(--color-text-secondary); line-height: 1.6; text-align: center; }
+  .footer a { color: var(--color-text-info); text-decoration: none; }
+</style>
+
+<div class="email-wrap">
+  <div class="email-shell">
+
+    <div class="email-meta">
+      <div><span>Dari:</span> &nbsp;no-reply@shopee.co.id</div>
+      <div><span>Kepada:</span> &nbsp;tokoanda@gmail.com</div>
+      <div><span>Subjek:</span> &nbsp;[Shopee Seller] Pesanan #250429-BTKR-84921 Telah Diterima Pembeli</div>
+      <div><span>Tanggal:</span> &nbsp;29 April 2026, 14:32 WIB</div>
+    </div>
+
+    <div class="shopee-header">
+      <div class="shopee-logo-text">shopee</div>
+      <div class="shopee-subheader">Notifikasi Toko — seller.shopee.co.id</div>
+    </div>
+
+    <div class="email-body">
+      <div class="status-badge"><div class="status-dot"></div> Pesanan Selesai</div>
+      <div class="greeting">Halo, Toko Elektronik Maju!</div>
+      <div class="subtext">Pembeli telah mengkonfirmasi bahwa pesanan berikut sudah diterima. Dana akan segera dicairkan ke saldo Shopee Anda dalam 1×24 jam.</div>
+
+      <div class="section-label">Detail Pesanan</div>
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-key">No. Pesanan</span>
+          <span class="info-val" style="font-family: var(--font-mono); font-size: 12px;">#250429-BTKR-84921</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Tanggal Pesanan</span>
+          <span class="info-val">24 April 2026</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Tanggal Diterima</span>
+          <span class="info-val">29 April 2026, 14:28 WIB</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Metode Pembayaran</span>
+          <span class="info-val">ShopeePay</span>
+        </div>
+      </div>
+
+      <div class="section-label">Produk</div>
+      <div class="info-card">
+        <div class="product-row">
+          <div class="product-img">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="4" fill="#F0F0F0"/><rect x="8" y="8" width="16" height="10" rx="2" fill="#BDBDBD"/><rect x="13" y="18" width="6" height="2" fill="#BDBDBD"/><rect x="10" y="20" width="12" height="2" rx="1" fill="#BDBDBD"/></svg>
+          </div>
+          <div class="product-detail">
+            <div class="product-name">Monitor LED 24 Inch Full HD 75Hz</div>
+            <div class="product-variant">Variasi: Hitam, 24"</div>
+          </div>
+          <div>
+            <div class="product-price">Rp 1.250.000</div>
+            <div class="product-qty">x1</div>
+          </div>
+        </div>
+        <div class="product-row">
+          <div class="product-img">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="4" fill="#F0F0F0"/><rect x="11" y="7" width="10" height="14" rx="2" fill="#BDBDBD"/><rect x="13" y="22" width="6" height="3" rx="1" fill="#BDBDBD"/></svg>
+          </div>
+          <div class="product-detail">
+            <div class="product-name">Keyboard Mechanical TKL RGB</div>
+            <div class="product-variant">Variasi: Putih, Blue Switch</div>
+          </div>
+          <div>
+            <div class="product-price">Rp 385.000</div>
+            <div class="product-qty">x1</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="total-row"><span class="total-label">Subtotal Produk</span><span class="total-val">Rp 1.635.000</span></div>
+        <div class="total-row"><span class="total-label">Ongkos Kirim (J&T Express)</span><span class="total-val">Rp 25.000</span></div>
+        <div class="total-row"><span class="total-label">Diskon Ongkir</span><span class="total-val" style="color: #2EAA5C;">−Rp 25.000</span></div>
+        <div class="total-row grand"><span class="total-label">Total Pesanan</span><span class="total-val">Rp 1.635.000</span></div>
+      </div>
+
+      <div class="section-label">Informasi Pengiriman</div>
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-key">Kurir</span>
+          <span class="info-val">J&T Express — Reguler</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">No. Resi</span>
+          <span class="info-val" style="font-family: var(--font-mono); font-size: 12px;">JP2604290012345678</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Penerima</span>
+          <span class="info-val">Budi Santoso</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Alamat</span>
+          <span class="info-val" style="max-width: 220px;">Jl. Raya Cikarang No. 45, Bekasi, Jawa Barat 17550</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <button class="cta-btn" onclick="alert('Tombol ini akan mengarah ke halaman detail pesanan di Shopee Seller Center')">Lihat Detail Pesanan di Seller Center</button>
+    </div>
+
+    <div class="footer">
+      Email ini dikirim secara otomatis oleh sistem Shopee. Mohon tidak membalas email ini.<br>
+      Jika ada pertanyaan, hubungi <a href="#">Pusat Bantuan Shopee</a> atau akses <a href="#">seller.shopee.co.id</a><br><br>
+      © 2026 Shopee International Indonesia. Semua hak dilindungi undang-undang.
+    </div>
+
+  </div>
+</div>

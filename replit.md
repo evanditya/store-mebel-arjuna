@@ -44,6 +44,16 @@ Currently migrates: `users.permissions TEXT` column.
 - `variant.original_price` = Harga Diskon (selling price, lower)
 - Discount only applies when `original_price < price`
 
+### Seller Email Notification (Shopee-format)
+- Seller's notification email configured at Seller Dashboard → Pengaturan → "Notifikasi Email Penjual"
+- Stored in `seller_config.json` field `notification_email`
+- Triggers when an order transitions to status `completed`:
+  - Manually via `PUT /api/orders/:id/status` (orders.py)
+  - Automatically by Biteship tracking when courier reports `delivered`/`completed` (shipping.py)
+- Email format mimics Shopee Seller "Pesanan Telah Diterima Pembeli" so the seller's existing Shopee email parser can also process these emails to update stock automatically
+- Implementation: `send_seller_order_delivered_email(order, buyer, seller_name, seller_email, base_url)` in `backend/app/email.py`
+- Snapshots are built BEFORE `db.commit()` (commit expires ORM attrs); emails are sent on a daemon thread
+
 ## Important Files
 - `backend/app/main.py` — FastAPI app + startup migrations
 - `backend/app/models.py` — SQLAlchemy models

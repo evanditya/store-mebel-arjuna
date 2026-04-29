@@ -72,7 +72,7 @@ KNOWN_COURIERS = [
 
 def _seller_config_path() -> str:
     import os
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "seller_config.json")
 
 
 def _get_seller_name() -> str:
@@ -82,6 +82,26 @@ def _get_seller_name() -> str:
             return d.get("site_name") or d.get("seller_name") or "Toko Online"
     except Exception:
         return "Toko Online"
+
+
+def _get_seller_notification_email() -> str:
+    try:
+        with open(_seller_config_path()) as f:
+            d = json.load(f)
+            return (d.get("notification_email") or "").strip()
+    except Exception:
+        return ""
+
+
+def _public_base_url(request) -> str:
+    try:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        proto = request.headers.get("x-forwarded-proto", "https")
+        if host:
+            return f"{proto}://{host}"
+    except Exception:
+        pass
+    return ""
 
 
 def _send_email_bg(fn, *args):
@@ -509,15 +529,18 @@ async def track_shipment(order_id: str, request: Request, db: Session = Depends(
 
         # Snapshot buyer + order BEFORE commit — commit expires all ORM attributes.
         order_snap = buyer_snap = completed_seller_name = None
+        seller_email_addr = ""
         if becoming_completed:
             try:
                 buyer = db.query(User).filter(User.id == order.user_id).first()
                 if buyer:
-                    from app.email import snapshot_order, snapshot_user
-                    _ = list(order.items)  # force-load items while session is open
-                    order_snap = snapshot_order(order)
+                    from app.email import snapshot_order, snapshot_user, snapshot_items_with_images
+                    items_loaded = list(order.items)
+                    items_snap = snapshot_items_with_images(items_loaded, db)
+                    order_snap = snapshot_order(order, items=items_snap)
                     buyer_snap = snapshot_user(buyer)
                     completed_seller_name = _get_seller_name()
+                    seller_email_addr = _get_seller_notification_email()
             except Exception as _e:
                 print(f"[Email] snapshot error (track/completed): {_e}")
 
@@ -530,6 +553,15 @@ async def track_shipment(order_id: str, request: Request, db: Session = Depends(
                 print(f"[Email] queued completed email for order {order.id}")
             except Exception as _e:
                 print(f"[Email] failed to queue completed email: {_e}")
+
+            if seller_email_addr:
+                try:
+                    from app.email import send_seller_order_delivered_email
+                    base = _public_base_url(request)
+                    _send_email_bg(send_seller_order_delivered_email, order_snap, buyer_snap, completed_seller_name, seller_email_addr, base)
+                    print(f"[Email] queued seller delivered email for order {order.id} -> {seller_email_addr}")
+                except Exception as _e:
+                    print(f"[Email] failed to queue seller delivered email: {_e}")
 
         history = courier.get("history", [])
         history.sort(key=lambda h: h.get("updated_at", ""), reverse=True)

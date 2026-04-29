@@ -23,6 +23,15 @@ def _get_seller_name() -> str:
         return "Toko Online"
 
 
+def _get_seller_notification_email() -> str:
+    try:
+        with open(_SELLER_CONFIG_PATH) as f:
+            d = _json.load(f)
+            return (d.get("notification_email") or "").strip()
+    except Exception:
+        return ""
+
+
 def _send_email_bg(fn, *args):
     def target():
         try:
@@ -199,19 +208,22 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
 
     # Snapshot BEFORE commit for status-change emails
     order_snap = buyer_snap = snap_seller_name = snap_email_fn = None
+    seller_email_addr = ""
     trigger_statuses = {"completed", "ready_pickup"}
     if status in trigger_statuses and prev_status != status:
         try:
             buyer = db.query(User).filter(User.id == order.user_id).first()
             if buyer:
-                from app.email import snapshot_order, snapshot_user
-                _ = list(order.items)  # force-load items while session is open
-                order_snap = snapshot_order(order)
+                from app.email import snapshot_order, snapshot_user, snapshot_items_with_images
+                items_loaded = list(order.items)
+                items_snap = snapshot_items_with_images(items_loaded, db)
+                order_snap = snapshot_order(order, items=items_snap)
                 buyer_snap = snapshot_user(buyer)
                 snap_seller_name = _get_seller_name()
                 if status == "completed":
                     from app.email import send_order_completed_email
                     snap_email_fn = send_order_completed_email
+                    seller_email_addr = _get_seller_notification_email()
                 elif status == "ready_pickup":
                     from app.email import send_order_ready_pickup_email
                     snap_email_fn = send_order_ready_pickup_email
@@ -227,4 +239,24 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
         except Exception:
             pass
 
+    if order_snap and buyer_snap and seller_email_addr and status == "completed":
+        try:
+            from app.email import send_seller_order_delivered_email
+            base = _get_public_base_url(request)
+            _send_email_bg(send_seller_order_delivered_email, order_snap, buyer_snap, snap_seller_name, seller_email_addr, base)
+            print(f"[Email] queued seller delivered email for order {order.id} -> {seller_email_addr}")
+        except Exception as _e:
+            print(f"[Email] failed to queue seller delivered email: {_e}")
+
     return {"order": order_to_dict(order)}
+
+
+def _get_public_base_url(request) -> str:
+    try:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        proto = request.headers.get("x-forwarded-proto", "https")
+        if host:
+            return f"{proto}://{host}"
+    except Exception:
+        pass
+    return ""
