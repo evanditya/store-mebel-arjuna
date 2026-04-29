@@ -63,7 +63,7 @@ export default function CartPage() {
             <div className="space-y-2 mb-6">
               {items.map((item) => (
                 <div key={item.id} className="bg-white rounded-lg border p-4 flex gap-4" data-testid={`cart-item-${item.id}`}>
-                  <img src={item.product?.primary_image || "/images/placeholder.svg"} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+                  <img src={item.product?.primary_image || "/images/placeholder.svg"} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).src = "/images/placeholder.svg"; }} />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-sm truncate">{item.product?.name || "Produk"}</h3>
                     {item.variant_name && <p className="text-xs text-gray-400 mt-0.5">{item.variant_name}</p>}

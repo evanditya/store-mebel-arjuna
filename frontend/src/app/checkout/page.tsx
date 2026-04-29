@@ -464,7 +464,7 @@ export default function CheckoutPage() {
           <div className="space-y-3">
             {items.map((item) => (
               <div key={item.id} className="flex gap-3 items-center">
-                <img src={item.product?.primary_image || "/images/placeholder.svg"} alt="" className="w-12 h-12 rounded object-cover" />
+                <img src={item.product?.primary_image || "/images/placeholder.svg"} alt="" className="w-12 h-12 rounded object-cover bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).src = "/images/placeholder.svg"; }} />
                 <div className="flex-1 min-w-0"><p className="text-sm truncate">{item.product?.name}</p>{item.variant_name && <p className="text-xs text-gray-400">{item.variant_name}</p>}</div>
                 <span className="text-sm text-gray-500">x{item.quantity}</span>
                 <span className="text-sm font-medium">{formatPrice((item.product?.price || 0) * item.quantity)}</span>

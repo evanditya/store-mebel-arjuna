@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import CartItem, Product, ProductVariant, gen_id
 from app.routes.auth import get_current_user
+from app.routes.products import resolve_primary_image
 
 router = APIRouter(prefix="/api")
 
@@ -20,7 +21,7 @@ def cart_item_dict(item: CartItem) -> dict:
         "product": {
             "name": product.name,
             "price": effective_price,
-            "primary_image": product.primary_image,
+            "primary_image": resolve_primary_image(product),
             "stock": product.stock,
             "weight": product.weight or 500,
             "length": product.length or 10,
