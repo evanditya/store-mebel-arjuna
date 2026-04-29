@@ -8,3 +8,5 @@ python-multipart==0.0.20
 httpx==0.26.0
 pydantic==2.5.3
 openpyxl==3.1.5
+beautifulsoup4==4.12.3
+imapclient==3.0.1

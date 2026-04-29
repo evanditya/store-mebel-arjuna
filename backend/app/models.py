@@ -140,3 +140,27 @@ class Banner(Base):
     order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ShopeeSyncLog(Base):
+    __tablename__ = "shopee_sync_log"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(String, unique=True, nullable=False, index=True)
+    subject = Column(String, nullable=True)
+    shopee_order_no = Column(String, nullable=True, index=True)
+    received_at = Column(DateTime, nullable=True)
+    processed_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, nullable=False, default="success")
+    items_json = Column(Text, nullable=True)
+    total_decremented = Column(Integer, default=0)
+    error_msg = Column(Text, nullable=True)
+
+
+class ShopeeProductMapping(Base):
+    __tablename__ = "shopee_product_mapping"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    shopee_product_name = Column(String, unique=True, nullable=False, index=True)
+    shopee_variant = Column(String, nullable=True)
+    product_id = Column(String, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    variant_id = Column(String, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

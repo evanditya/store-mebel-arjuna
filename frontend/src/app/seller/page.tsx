@@ -21,8 +21,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 const BannerCropper = dynamic(() => import("@/components/BannerCropper"), { ssr: false });
 
-interface ProductVariantStock { variant_type: string; variant_name: string; stock: number; is_available: boolean; }
-interface Product { name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; variants?: ProductVariantStock[]; }
+interface ProductVariantStock { id?: string; variant_type: string; variant_name: string; stock: number; is_available: boolean; }
+interface Product { id?: string; name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; variants?: ProductVariantStock[]; }
 interface Banner {
   id: number;
   image_url: string;
@@ -196,6 +196,27 @@ export default function SellerDashboard() {
   const [courierSaving, setCourierSaving] = useState(false);
   const [courierMsg, setCourierMsg] = useState("");
 
+  type ShopeeSyncStatus = {
+    imap_configured: boolean;
+    daemon: { running: boolean; last_event: string; last_error: string };
+    totals: { all: number; success: number; partial: number; no_match: number; error: number };
+    last_processed_at: string | null;
+    last_status: string | null;
+    last_subject: string | null;
+  };
+  type ShopeeSyncLogItem = { name: string; variant: string; qty: number; matched: boolean; product_name?: string; variant_name?: string; decremented: number };
+  type ShopeeSyncLog = { id: number; subject: string; shopee_order_no: string; processed_at: string; status: string; items: ShopeeSyncLogItem[]; total_decremented: number; error_msg: string | null };
+  type ShopeeUnmatched = { name: string; variant_examples: string[]; count: number };
+  type ShopeeMapping = { id: number; shopee_product_name: string; shopee_variant: string | null; product_id: string; product_name: string | null; variant_id: string | null; variant_name: string | null };
+
+  const [shopeeStatus, setShopeeStatus] = useState<ShopeeSyncStatus | null>(null);
+  const [shopeeLogs, setShopeeLogs] = useState<ShopeeSyncLog[]>([]);
+  const [shopeeUnmatched, setShopeeUnmatched] = useState<ShopeeUnmatched[]>([]);
+  const [shopeeMappings, setShopeeMappings] = useState<ShopeeMapping[]>([]);
+  const [shopeeSyncing, setShopeeSyncing] = useState(false);
+  const [shopeeMsg, setShopeeMsg] = useState("");
+  const [shopeeMapForm, setShopeeMapForm] = useState<{ shopee_name: string; product_id: string; variant_id: string }>({ shopee_name: "", product_id: "", variant_id: "" });
+
   const [banners, setBanners] = useState<Banner[]>([]);
   const [showCropper, setShowCropper] = useState(false);
   const [bannerForms, setBannerForms] = useState<Record<number, { title: string; link: string }>>({});
@@ -214,7 +235,6 @@ export default function SellerDashboard() {
     pickup_enabled: false,
     pickup_open: "08:00",
     pickup_close: "17:00",
-    notification_email: "",
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
@@ -368,7 +388,6 @@ export default function SellerDashboard() {
         pickup_enabled: data.pickup_enabled || false,
         pickup_open: data.pickup_open_time || "08:00",
         pickup_close: data.pickup_close_time || "17:00",
-        notification_email: data.notification_email || "",
       });
     }).catch(() => {});
     loadBanners();
@@ -394,6 +413,84 @@ export default function SellerDashboard() {
     setTimeout(() => setCourierMsg(""), 3000);
   };
 
+  const loadShopeeAll = async () => {
+    try {
+      const [s, l, u, m] = await Promise.all([
+        fetch("/api/shopee-sync/status").then((r) => r.json()).catch(() => null),
+        fetch("/api/shopee-sync/logs?limit=20").then((r) => r.json()).catch(() => ({ logs: [] })),
+        fetch("/api/shopee-sync/unmatched").then((r) => r.json()).catch(() => ({ unmatched: [] })),
+        fetch("/api/shopee-sync/mappings").then((r) => r.json()).catch(() => ({ mappings: [] })),
+      ]);
+      if (s) setShopeeStatus(s);
+      setShopeeLogs(l.logs || []);
+      setShopeeUnmatched(u.unmatched || []);
+      setShopeeMappings(m.mappings || []);
+    } catch {}
+  };
+
+  const runShopeeSync = async () => {
+    setShopeeSyncing(true); setShopeeMsg("");
+    try {
+      const res = await fetch("/api/shopee-sync/run", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setShopeeMsg(`Selesai: ${data.processed || 0} email diproses${data.skipped ? `, ${data.skipped} dilewati` : ""}`);
+        await loadShopeeAll();
+      } else {
+        setShopeeMsg(data.error || data.detail || "Gagal sinkronisasi");
+      }
+    } catch (e) {
+      setShopeeMsg("Koneksi gagal: " + String(e));
+    } finally {
+      setShopeeSyncing(false);
+      setTimeout(() => setShopeeMsg(""), 5000);
+    }
+  };
+
+  const saveShopeeMapping = async (shopeeName: string, productId: string, variantId: string) => {
+    if (!shopeeName || !productId) { setShopeeMsg("Pilih produk terlebih dahulu"); return; }
+    try {
+      const res = await fetch("/api/shopee-sync/mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shopee_name: shopeeName, product_id: productId, variant_id: variantId || null }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShopeeMsg("Mapping disimpan");
+        setShopeeMapForm({ shopee_name: "", product_id: "", variant_id: "" });
+        await loadShopeeAll();
+      } else {
+        setShopeeMsg(data.error || data.detail || "Gagal menyimpan mapping");
+      }
+    } catch (e) {
+      setShopeeMsg("Koneksi gagal: " + String(e));
+    }
+    setTimeout(() => setShopeeMsg(""), 4000);
+  };
+
+  const deleteShopeeMapping = async (id: number) => {
+    if (!confirm("Hapus mapping ini?")) return;
+    try {
+      const res = await fetch(`/api/shopee-sync/mappings/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadShopeeAll();
+        setShopeeMsg("Mapping dihapus");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setShopeeMsg(d.error || d.detail || "Gagal menghapus");
+      }
+    } catch (e) {
+      setShopeeMsg("Koneksi gagal: " + String(e));
+    }
+    setTimeout(() => setShopeeMsg(""), 3000);
+  };
+
+  useEffect(() => {
+    if (tab === "settings") loadShopeeAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   const saveBranding = async () => {
     setBrandingSaving(true);
     setBrandingMsg("");
@@ -412,7 +509,6 @@ export default function SellerDashboard() {
           pickup_enabled: brandingForm.pickup_enabled,
           pickup_open_time: brandingForm.pickup_open,
           pickup_close_time: brandingForm.pickup_close,
-          notification_email: brandingForm.notification_email,
         }),
       });
       if (res.ok) {
@@ -1186,41 +1282,6 @@ export default function SellerDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Notifikasi Email Penjual</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Email ini akan menerima notifikasi otomatis saat pesanan diterima pembeli (status: selesai). Format email mengikuti format Shopee agar parser stok otomatis dapat membacanya.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Alamat email notifikasi</label>
-                  <input
-                    type="email"
-                    value={brandingForm.notification_email}
-                    onChange={(e) => setBrandingForm((p) => ({ ...p, notification_email: e.target.value }))}
-                    placeholder="contoh: stok@tokomu.com"
-                    className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Kosongkan jika tidak ingin menerima email notifikasi penjual.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={saveBranding}
-                    disabled={brandingSaving}
-                    className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
-                  >
-                    {brandingSaving ? "Menyimpan..." : "Simpan Email Notifikasi"}
-                  </button>
-                  {brandingMsg && (
-                    <span className={`text-sm ${brandingMsg.includes("berhasil") ? "text-green-600" : "text-red-500"}`}>{brandingMsg}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {shippingAvailable && (
               <div className="bg-white rounded-lg border p-6">
                 <h2 className="font-bold text-lg mb-1">Kurir Aktif</h2>
@@ -1391,6 +1452,207 @@ export default function SellerDashboard() {
                   ) : (
                     <p>{syncZipResult.error || "Sinkronisasi gagal"}</p>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg border p-6" data-testid="card-shopee-sync">
+              <div className="flex items-start justify-between flex-wrap gap-3 mb-1">
+                <h2 className="font-bold text-lg">Sinkronisasi Shopee</h2>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${shopeeStatus?.imap_configured ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                  {shopeeStatus?.imap_configured ? "IMAP terhubung" : "IMAP belum dikonfigurasi"}
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Otomatis mengurangi stok produk saat pembeli Shopee menerima pesanan. Sistem memantau email <strong>&quot;Pesanan Telah Diterima Pembeli&quot;</strong> dari Shopee.
+              </p>
+
+              {!shopeeStatus?.imap_configured && (
+                <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                  Belum aktif. Atur Secret di Replit: <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs">IMAP_USER</code> (alamat Gmail) dan <code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs">IMAP_PASSWORD</code> (Gmail App Password). Kemudian restart aplikasi.
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                <div className="border rounded-lg p-3 text-center">
+                  <div className="text-xs text-gray-500">Total</div>
+                  <div className="text-lg font-bold">{shopeeStatus?.totals.all ?? 0}</div>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-green-50">
+                  <div className="text-xs text-gray-600">Berhasil</div>
+                  <div className="text-lg font-bold text-green-700">{shopeeStatus?.totals.success ?? 0}</div>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-yellow-50">
+                  <div className="text-xs text-gray-600">Sebagian</div>
+                  <div className="text-lg font-bold text-yellow-700">{shopeeStatus?.totals.partial ?? 0}</div>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-orange-50">
+                  <div className="text-xs text-gray-600">Tdk Cocok</div>
+                  <div className="text-lg font-bold text-orange-700">{shopeeStatus?.totals.no_match ?? 0}</div>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-red-50">
+                  <div className="text-xs text-gray-600">Error</div>
+                  <div className="text-lg font-bold text-red-700">{shopeeStatus?.totals.error ?? 0}</div>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500 mb-4 space-y-0.5">
+                <div>Status daemon: <span className="font-medium text-gray-700">{shopeeStatus?.daemon.last_event || "-"}</span></div>
+                {shopeeStatus?.last_processed_at && (
+                  <div>Proses terakhir: <span className="font-medium text-gray-700">{new Date(shopeeStatus.last_processed_at).toLocaleString("id-ID")}</span></div>
+                )}
+                {shopeeStatus?.daemon.last_error && (
+                  <div className="text-red-600">Error terakhir: {shopeeStatus.daemon.last_error}</div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap mb-5">
+                <button
+                  onClick={runShopeeSync}
+                  disabled={shopeeSyncing || !shopeeStatus?.imap_configured}
+                  className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                  data-testid="btn-shopee-sync-now"
+                >
+                  {shopeeSyncing ? "Memeriksa..." : "Sinkron Sekarang"}
+                </button>
+                <button
+                  onClick={loadShopeeAll}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+                >
+                  Refresh
+                </button>
+                {shopeeMsg && <span className="text-sm text-gray-700">{shopeeMsg}</span>}
+              </div>
+
+              {shopeeUnmatched.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="font-semibold text-sm mb-2 text-gray-800">Produk Shopee yang Belum Dipetakan ({shopeeUnmatched.length})</h3>
+                  <p className="text-xs text-gray-500 mb-3">Pilih produk toko untuk setiap nama Shopee agar stok bisa otomatis dikurangi.</p>
+                  <div className="border rounded-lg divide-y">
+                    {shopeeUnmatched.map((u) => {
+                      const isActive = shopeeMapForm.shopee_name === u.name;
+                      const selectedProduct = products.find((p) => p.id === shopeeMapForm.product_id);
+                      return (
+                        <div key={u.name} className="p-3" data-testid="row-unmatched">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 break-words">{u.name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                Muncul {u.count}x{u.variant_examples.length > 0 && ` · Varian: ${u.variant_examples.slice(0, 3).join(", ")}`}
+                              </div>
+                            </div>
+                            {!isActive ? (
+                              <button
+                                onClick={() => setShopeeMapForm({ shopee_name: u.name, product_id: "", variant_id: "" })}
+                                className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                              >
+                                Petakan
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setShopeeMapForm({ shopee_name: "", product_id: "", variant_id: "" })}
+                                className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                              >
+                                Batal
+                              </button>
+                            )}
+                          </div>
+                          {isActive && (
+                            <div className="mt-3 flex flex-wrap gap-2 items-center">
+                              <select
+                                value={shopeeMapForm.product_id}
+                                onChange={(e) => setShopeeMapForm((p) => ({ ...p, product_id: e.target.value, variant_id: "" }))}
+                                className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px]"
+                              >
+                                <option value="">— Pilih produk toko —</option>
+                                {products.map((p) => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                              {selectedProduct && Array.isArray(selectedProduct.variants) && selectedProduct.variants.length > 0 && (
+                                <select
+                                  value={shopeeMapForm.variant_id}
+                                  onChange={(e) => setShopeeMapForm((p) => ({ ...p, variant_id: e.target.value }))}
+                                  className="border rounded-lg px-3 py-2 text-sm"
+                                >
+                                  <option value="">— Semua varian —</option>
+                                  {selectedProduct.variants.map((v: { id: string; variant_name: string }) => (
+                                    <option key={v.id} value={v.id}>{v.variant_name}</option>
+                                  ))}
+                                </select>
+                              )}
+                              <button
+                                onClick={() => saveShopeeMapping(shopeeMapForm.shopee_name, shopeeMapForm.product_id, shopeeMapForm.variant_id)}
+                                disabled={!shopeeMapForm.product_id}
+                                className="px-3 py-2 bg-gray-900 text-white text-xs rounded-lg disabled:opacity-50"
+                              >
+                                Simpan
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {shopeeMappings.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="font-semibold text-sm mb-2 text-gray-800">Pemetaan Aktif ({shopeeMappings.length})</h3>
+                  <div className="border rounded-lg divide-y text-sm">
+                    {shopeeMappings.map((m) => (
+                      <div key={m.id} className="p-3 flex items-start justify-between gap-3 flex-wrap" data-testid="row-mapping">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-gray-900 break-words"><span className="text-xs text-gray-500">Shopee:</span> {m.shopee_product_name}</div>
+                          <div className="text-gray-700 break-words mt-0.5"><span className="text-xs text-gray-500">→ Toko:</span> {m.product_name || "(produk dihapus)"}{m.variant_name ? ` · ${m.variant_name}` : ""}</div>
+                        </div>
+                        <button
+                          onClick={() => deleteShopeeMapping(m.id)}
+                          className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {shopeeLogs.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-sm mb-2 text-gray-800">Riwayat Sinkronisasi Terakhir</h3>
+                  <div className="border rounded-lg divide-y text-sm max-h-96 overflow-y-auto">
+                    {shopeeLogs.map((log) => {
+                      const statusColor = log.status === "success" ? "bg-green-100 text-green-800"
+                        : log.status === "partial" ? "bg-yellow-100 text-yellow-800"
+                        : log.status === "no_match" ? "bg-orange-100 text-orange-800"
+                        : "bg-red-100 text-red-800";
+                      return (
+                        <div key={log.id} className="p-3" data-testid="row-shopee-log">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{log.status}</span>
+                              <span className="font-medium">#{log.shopee_order_no || "-"}</span>
+                              <span className="text-xs text-gray-500">{new Date(log.processed_at).toLocaleString("id-ID")}</span>
+                            </div>
+                            <span className="text-xs text-gray-600">−{log.total_decremented} stok</span>
+                          </div>
+                          {log.items.length > 0 && (
+                            <ul className="mt-2 text-xs text-gray-600 space-y-0.5 pl-3">
+                              {log.items.map((it, i) => (
+                                <li key={i} className={it.matched ? "" : "text-orange-600"}>
+                                  {it.matched ? "✓" : "✗"} {it.name}{it.variant ? ` (${it.variant})` : ""} × {it.qty}
+                                  {it.matched && it.product_name && it.product_name !== it.name && <span className="text-gray-400"> → {it.product_name}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {log.error_msg && <div className="text-xs text-red-600 mt-1">{log.error_msg}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

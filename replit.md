@@ -44,15 +44,20 @@ Currently migrates: `users.permissions TEXT` column.
 - `variant.original_price` = Harga Diskon (selling price, lower)
 - Discount only applies when `original_price < price`
 
-### Seller Email Notification (Shopee-format)
-- Seller's notification email configured at Seller Dashboard → Pengaturan → "Notifikasi Email Penjual"
-- Stored in `seller_config.json` field `notification_email`
-- Triggers when an order transitions to status `completed`:
-  - Manually via `PUT /api/orders/:id/status` (orders.py)
-  - Automatically by Biteship tracking when courier reports `delivered`/`completed` (shipping.py)
-- Email format mimics Shopee Seller "Pesanan Telah Diterima Pembeli" so the seller's existing Shopee email parser can also process these emails to update stock automatically
-- Implementation: `send_seller_order_delivered_email(order, buyer, seller_name, seller_email, base_url)` in `backend/app/email.py`
-- Snapshots are built BEFORE `db.commit()` (commit expires ORM attrs); emails are sent on a daemon thread
+### Shopee → Store Stock Sync (Inbox watcher)
+- Watches the seller's Gmail inbox for Shopee Seller "Pesanan Telah Diterima Pembeli" emails and decrements matching DB product stock automatically
+- Trigger: IMAP IDLE push (instant) on Gmail INBOX, with a 30-min fallback poll. Daemon reconnects every 28 min (Gmail closes IDLE at ~29 min). Spawned in FastAPI lifespan startup.
+- Required env vars/Secrets: `IMAP_USER` (Gmail address), `IMAP_PASSWORD` (Gmail App Password). Optional: `IMAP_HOST` (default `imap.gmail.com`), `IMAP_PORT` (993), `IMAP_FOLDER` (`INBOX`). Without `IMAP_USER` the daemon is a strict no-op (logs "IMAP not configured — daemon disabled").
+- Matching strategy:
+  1. `ShopeeProductMapping` (manual mapping by lowercased Shopee product name → product_id + optional variant_id)
+  2. Exact case-insensitive match on `Product.name`
+  3. If still no match → log as `no_match` so seller can map it via UI
+- Stock decrement: never below 0. If a matching variant is set, decrement `variant.stock` then re-sum into `product.stock`. If no variant, decrement `product.stock` directly.
+- Idempotency: `ShopeeSyncLog.message_id` is UNIQUE; re-processing the same email is a no-op.
+- Tables: `shopee_sync_log` (id, message_id UNIQUE, subject, shopee_order_no, items_json, status: success|partial|no_match|error, total_decremented, error_msg, processed_at) and `shopee_product_mapping` (id, shopee_product_name UNIQUE lowercased, product_id FK, variant_id nullable FK, created_at).
+- Admin UI at Seller Dashboard → Pengaturan → "Sinkronisasi Shopee" card: shows IMAP status badge, totals (success/partial/no_match/error), Sinkron Sekarang button, recent log list, unmatched names with mapping dropdown, and existing mappings list with delete.
+- Admin API: `GET/POST /api/shopee-sync/{status,run,logs,unmatched,mappings}` and `DELETE /mappings/{id}`. Auth via `get_current_user` + `is_staff`.
+- Files: `backend/app/shopee_parser.py` (BeautifulSoup-based parser), `backend/app/shopee_sync.py` (sync engine + IDLE daemon), `backend/app/routes/shopee_sync.py` (admin routes).
 
 ## Important Files
 - `backend/app/main.py` — FastAPI app + startup migrations
