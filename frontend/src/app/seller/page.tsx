@@ -216,6 +216,19 @@ export default function SellerDashboard() {
   const [shopeeSyncing, setShopeeSyncing] = useState(false);
   const [shopeeMsg, setShopeeMsg] = useState("");
   const [shopeeMapForm, setShopeeMapForm] = useState<{ shopee_name: string; product_id: string; variant_id: string }>({ shopee_name: "", product_id: "", variant_id: "" });
+  const [shopeeTestOpen, setShopeeTestOpen] = useState(false);
+  const [shopeeTestSubject, setShopeeTestSubject] = useState("[Shopee Seller] Pesanan #TEST-001 Telah Diterima Pembeli");
+  const [shopeeTestHtml, setShopeeTestHtml] = useState("");
+  const [shopeeTestRunning, setShopeeTestRunning] = useState(false);
+  type ShopeeTestResult = {
+    subject_matches_filter: boolean;
+    order_no: string;
+    items_found: number;
+    items: { name: string; variant: string; qty: number; matched: boolean; product_name: string | null; variant_name: string | null; current_stock: number | null }[];
+    note?: string;
+    error?: string;
+  };
+  const [shopeeTestResult, setShopeeTestResult] = useState<ShopeeTestResult | null>(null);
 
   const [banners, setBanners] = useState<Banner[]>([]);
   const [showCropper, setShowCropper] = useState(false);
@@ -1522,6 +1535,121 @@ export default function SellerDashboard() {
                   Refresh
                 </button>
                 {shopeeMsg && <span className="text-sm text-gray-700">{shopeeMsg}</span>}
+              </div>
+
+              <div className="mb-5 border rounded-lg" data-testid="panel-shopee-test">
+                <button
+                  type="button"
+                  onClick={() => setShopeeTestOpen((v) => !v)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition"
+                >
+                  <span className="font-semibold text-sm text-gray-800">🧪 Tes Parser Email (Dry-run)</span>
+                  <span className="text-xs text-gray-500">{shopeeTestOpen ? "Tutup" : "Buka"}</span>
+                </button>
+                {shopeeTestOpen && (
+                  <div className="px-4 pb-4 border-t pt-3 space-y-3">
+                    <p className="text-xs text-gray-500">
+                      Tempel <strong>Subject</strong> dan <strong>HTML body</strong> email Shopee untuk melihat apa yang akan diparsing dan dipetakan ke produk Anda. <em>Tidak ada perubahan stok.</em>
+                    </p>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Subject Email</label>
+                      <input
+                        value={shopeeTestSubject}
+                        onChange={(e) => setShopeeTestSubject(e.target.value)}
+                        placeholder="[Shopee Seller] Pesanan #XXX-XXX-XXX Telah Diterima Pembeli"
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">HTML Body</label>
+                      <textarea
+                        value={shopeeTestHtml}
+                        onChange={(e) => setShopeeTestHtml(e.target.value)}
+                        rows={6}
+                        placeholder='Contoh: <div class="product-row"><div class="product-name">Nama Produk</div><div class="product-variant">Variasi: Hitam</div><div class="product-qty">x2</div></div>'
+                        className="w-full border rounded-lg px-3 py-2 text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShopeeTestSubject("[Shopee Seller] Pesanan #TEST-001 Telah Diterima Pembeli");
+                          const sample = products.slice(0, 2).map((p) => `  <div class="product-row">\n    <div class="product-name">${p.name}</div>\n    <div class="product-variant">Variasi: ${p.variants?.[0]?.variant_name || "-"}</div>\n    <div class="product-qty">x1</div>\n  </div>`).join("\n");
+                          setShopeeTestHtml(`<html><body>\n<div class="product-list">\n${sample}\n</div>\n</body></html>`);
+                        }}
+                        className="mt-2 text-xs text-blue-600 hover:underline"
+                      >
+                        Isi otomatis dengan 2 produk toko Anda
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!shopeeTestSubject.trim() || !shopeeTestHtml.trim()) { setShopeeTestResult({ subject_matches_filter: false, order_no: "", items_found: 0, items: [], error: "Subject dan HTML wajib diisi" }); return; }
+                        setShopeeTestRunning(true); setShopeeTestResult(null);
+                        try {
+                          const res = await fetch("/api/shopee-sync/test-parse", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ subject: shopeeTestSubject, html: shopeeTestHtml }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { setShopeeTestResult({ subject_matches_filter: false, order_no: "", items_found: 0, items: [], error: data.error || data.detail || "Gagal" }); }
+                          else { setShopeeTestResult(data); }
+                        } catch (e) {
+                          setShopeeTestResult({ subject_matches_filter: false, order_no: "", items_found: 0, items: [], error: "Koneksi gagal: " + String(e) });
+                        } finally {
+                          setShopeeTestRunning(false);
+                        }
+                      }}
+                      disabled={shopeeTestRunning}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {shopeeTestRunning ? "Memproses..." : "Jalankan Tes"}
+                    </button>
+
+                    {shopeeTestResult && (
+                      <div className="mt-3 p-3 rounded-lg border bg-gray-50 text-sm">
+                        {shopeeTestResult.error ? (
+                          <div className="text-red-700">{shopeeTestResult.error}</div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-3 gap-3 mb-3 text-center">
+                              <div className={`p-2 rounded ${shopeeTestResult.subject_matches_filter ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                <div className="text-xs">Subject Cocok?</div>
+                                <div className="font-bold">{shopeeTestResult.subject_matches_filter ? "✓ Ya" : "✗ Tidak"}</div>
+                              </div>
+                              <div className="p-2 rounded bg-white border">
+                                <div className="text-xs text-gray-500">Order No</div>
+                                <div className="font-mono text-xs font-medium">{shopeeTestResult.order_no || "-"}</div>
+                              </div>
+                              <div className="p-2 rounded bg-white border">
+                                <div className="text-xs text-gray-500">Item Ditemukan</div>
+                                <div className="font-bold">{shopeeTestResult.items_found}</div>
+                              </div>
+                            </div>
+                            {shopeeTestResult.items.length > 0 ? (
+                              <ul className="space-y-2">
+                                {shopeeTestResult.items.map((it, i) => (
+                                  <li key={i} className={`p-2 rounded border ${it.matched ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
+                                    <div className="font-medium text-xs break-words">{it.matched ? "✓" : "✗"} {it.name}{it.variant && <span className="text-gray-500"> · {it.variant}</span>} <span className="text-gray-700">× {it.qty}</span></div>
+                                    {it.matched ? (
+                                      <div className="text-xs text-green-700 mt-1">→ {it.product_name}{it.variant_name && ` (${it.variant_name})`} · stok saat ini: {it.current_stock}</div>
+                                    ) : (
+                                      <div className="text-xs text-orange-700 mt-1">Tidak cocok dengan produk toko mana pun. Akan masuk ke daftar &quot;belum dipetakan&quot;.</div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="text-xs text-orange-700">Tidak ada item terdeteksi. Pastikan HTML berisi elemen <code>.product-row</code>, <code>.product-name</code>, dan <code>.product-qty</code>.</div>
+                            )}
+                            {shopeeTestResult.note && <div className="text-xs text-gray-500 mt-2 italic">{shopeeTestResult.note}</div>}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {shopeeUnmatched.length > 0 && (

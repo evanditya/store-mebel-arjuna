@@ -222,6 +222,48 @@ async def upsert_mapping(request: Request, db: Session = Depends(get_db)):
     return {"success": True, "id": existing.id}
 
 
+@router.post("/test-parse")
+async def test_parse(request: Request, db: Session = Depends(get_db)):
+    """Dry-run: parse subject + HTML and report what would be matched/decremented. No DB writes."""
+    ok, err = _admin_or_403(request, db)
+    if not ok:
+        return err
+    body = await request.json()
+    subject = (body.get("subject") or "").strip()
+    html = body.get("html") or ""
+    if not subject or not html:
+        return JSONResponse({"error": "subject dan html wajib diisi"}, status_code=400)
+
+    from app.shopee_parser import parse_shopee_delivered_email, is_shopee_delivered_subject
+
+    subject_ok = is_shopee_delivered_subject(subject)
+    parsed = parse_shopee_delivered_email(html, subject)
+
+    items_out = []
+    for it in parsed.get("items", []):
+        product, variant = svc._resolve_match(db, it["name"], it.get("variant", ""))
+        items_out.append({
+            "name": it["name"],
+            "variant": it.get("variant", ""),
+            "qty": it["qty"],
+            "matched": bool(product),
+            "matched_via": ("mapping/exact" if product else None),
+            "product_id": product.id if product else None,
+            "product_name": product.name if product else None,
+            "variant_id": variant.id if variant else None,
+            "variant_name": variant.variant_name if variant else None,
+            "current_stock": (variant.stock if variant else (product.stock if product else None)),
+        })
+
+    return {
+        "subject_matches_filter": subject_ok,
+        "order_no": parsed.get("order_no"),
+        "items_found": len(items_out),
+        "items": items_out,
+        "note": "Dry-run — tidak ada perubahan stok atau log dibuat.",
+    }
+
+
 @router.delete("/mappings/{mapping_id}")
 async def delete_mapping(mapping_id: int, request: Request, db: Session = Depends(get_db)):
     ok, err = _admin_or_403(request, db)
