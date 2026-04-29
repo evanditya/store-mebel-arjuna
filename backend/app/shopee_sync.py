@@ -77,25 +77,41 @@ def _decode_header(s) -> str:
         return str(s)
 
 
+_SHOPEE_MARKUP_MARKER = 'class="product-row"'
+
+
 def _extract_html(msg) -> str:
-    """Return the HTML body of an email.message.Message (or empty)."""
+    """Return the best HTML body to parse for Shopee product rows.
+
+    Gmail composes multipart/alternative emails where the text/html part
+    HTML-escapes the user's raw markup (class=&quot;product-row&quot;) while
+    the text/plain part preserves the literal HTML source.  We therefore
+    prefer whichever MIME part actually contains the unescaped marker string
+    before falling back to a type-based preference.
+    """
     if msg.is_multipart():
-        # Prefer text/html parts; fall back to text/plain wrapped in <pre>
-        html_part = None
-        text_part = None
+        html_body: Optional[str] = None
+        text_body: Optional[str] = None
         for part in msg.walk():
             ctype = part.get_content_type()
             disp = str(part.get("Content-Disposition") or "")
             if "attachment" in disp.lower():
                 continue
-            if ctype == "text/html" and html_part is None:
-                html_part = part
-            elif ctype == "text/plain" and text_part is None:
-                text_part = part
-        if html_part is not None:
-            return _decode_payload(html_part)
-        if text_part is not None:
-            return f"<pre>{_decode_payload(text_part)}</pre>"
+            if ctype == "text/html" and html_body is None:
+                html_body = _decode_payload(part)
+            elif ctype == "text/plain" and text_body is None:
+                text_body = _decode_payload(part)
+
+        # Prefer whichever part has the raw Shopee HTML markup intact
+        if html_body and _SHOPEE_MARKUP_MARKER in html_body:
+            return html_body
+        if text_body and _SHOPEE_MARKUP_MARKER in text_body:
+            return text_body
+        # No markup found — return whatever we have (type-based preference)
+        if html_body is not None:
+            return html_body
+        if text_body is not None:
+            return text_body
         return ""
     else:
         return _decode_payload(msg)
