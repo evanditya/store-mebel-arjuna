@@ -34,28 +34,34 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
   const isOutOfStock = totalStock != null && totalStock === 0;
 
   return (
-    <div className="bg-white rounded-lg border overflow-hidden cursor-pointer hover:shadow-md transition" onClick={onClick} data-testid={`product-card-${product.slug}`}>
+    <div
+      className={`bg-white rounded-lg border overflow-hidden transition ${isOutOfStock ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:shadow-md"}`}
+      onClick={isOutOfStock ? undefined : onClick}
+      data-testid={`product-card-${product.slug}`}
+    >
       <div className="aspect-square relative">
         <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
         {hasDiscount && !isOutOfStock && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{Math.round((1 - product.original_price! / product.price) * 100)}%</span>
         )}
         {isOutOfStock && (
-          <span className="absolute top-2 left-2 bg-gray-700 text-white text-xs px-1.5 py-0.5 rounded">Habis</span>
+          <div className="absolute inset-0 flex items-end justify-center pb-3 bg-black/20">
+            <span className="bg-gray-800/90 text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide">Not Available</span>
+          </div>
         )}
       </div>
       <div className="p-3">
         <h3 className="text-sm line-clamp-2 mb-1">{product.name}</h3>
-        <p className="text-red-600 font-bold text-sm">
+        <p className={`font-bold text-sm ${isOutOfStock ? "text-gray-400" : "text-red-600"}`}>
           {hasRange ? `${formatPrice(min)} - ${formatPrice(max)}` : formatPrice(min)}
         </p>
-        {hasDiscount && <p className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</p>}
+        {hasDiscount && !isOutOfStock && <p className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</p>}
         <div className="flex items-center justify-between mt-1 text-xs text-gray-400">
           <span>{formatSoldCount(product.sold_count)}</span>
-          {totalStock != null && !isOutOfStock && totalStock <= 10 && (
+          {!isOutOfStock && totalStock != null && totalStock <= 10 && (
             <span className="text-orange-500 font-medium">Sisa {totalStock}</span>
           )}
-          {totalStock != null && !isOutOfStock && totalStock > 10 && (
+          {!isOutOfStock && totalStock != null && totalStock > 10 && (
             <span>Stok: {totalStock}</span>
           )}
         </div>

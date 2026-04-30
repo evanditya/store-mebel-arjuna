@@ -206,6 +206,7 @@ async def list_products(
     limit: int = 20,
     db: Session = Depends(get_db),
 ):
+    from sqlalchemy import case as sa_case
     query = db.query(Product).options(joinedload(Product.variants), joinedload(Product.images))
     if category:
         query = query.filter(Product.category == category)
@@ -214,7 +215,9 @@ async def list_products(
     total = query.distinct().count()
     page = max(1, page)
     limit = max(1, min(limit, 100))
-    products = query.distinct().offset((page - 1) * limit).limit(limit).all()
+    # Out-of-stock products go to the end; within each group keep original DB order
+    stock_order = sa_case((Product.stock == 0, 1), else_=0)
+    products = query.distinct().order_by(stock_order).offset((page - 1) * limit).limit(limit).all()
     seller = load_seller_config()
     return {
         "products": [product_to_list_dict(p) for p in products],
