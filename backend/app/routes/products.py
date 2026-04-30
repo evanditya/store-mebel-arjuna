@@ -719,6 +719,8 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
         db_w = SessionLocal()
         created = updated = 0
         errors = []
+        from datetime import datetime as _dt, timedelta as _td
+        sync_base_time = _dt.utcnow()
         try:
             for idx, p in enumerate(products_list):
                 try:
@@ -751,6 +753,9 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
                         product.slug = base_slug
                         product.weight = 500
                         product.length = product.width = product.height = 10
+                        # Preserve Shopee order: each new product gets a timestamp
+                        # offset by its position in the file so they sort correctly
+                        product.created_at = sync_base_time + _td(milliseconds=idx)
 
                     product.name = name
                     product.price = price
