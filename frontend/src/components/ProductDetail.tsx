@@ -137,12 +137,16 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     if (matchedCombo && matchedCombo.is_available) {
       const absOrig = getVariantOriginalAbsPrice(matchedCombo);
       if (absOrig != null) return absOrig;
+      // Variant has its own absolute price but no variant-level discount →
+      // don't fall through to product-level discount; the variant price stands alone.
+      if (matchedCombo.price != null) return null;
     }
     if (selectedNames.length === 1) {
       const selected = displayVariants.find((v) => v.variant_name === selectedNames[0]);
       if (selected && selected.is_available) {
         const absOrig = getVariantOriginalAbsPrice(selected);
         if (absOrig != null) return absOrig;
+        if (selected.price != null) return null;
       }
     }
     if (hasDiscount) return product.price;
