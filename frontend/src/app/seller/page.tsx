@@ -1356,6 +1356,24 @@ export default function SellerDashboard() {
                   <p className="text-sm text-gray-400">Memuat daftar kurir...</p>
                 ) : (
                   <>
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setAllowedCouriers(allCouriers.map((c) => c.code))}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:border-gray-500 hover:bg-gray-50 transition"
+                        data-testid="btn-courier-select-all"
+                      >
+                        Pilih Semua
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAllowedCouriers([])}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-500 hover:border-gray-500 hover:bg-gray-50 transition"
+                        data-testid="btn-courier-deselect-all"
+                      >
+                        Batalkan Semua
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
                       {allCouriers.map((c) => {
                         const checked = allowedCouriers.includes(c.code);
