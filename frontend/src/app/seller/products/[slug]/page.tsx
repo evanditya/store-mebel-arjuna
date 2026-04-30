@@ -403,10 +403,13 @@ export default function EditProductPage() {
                     <input type="number" value={variant.stock} min="0" onChange={(e) => updateVariant(index, "stock", Math.max(0, Number(e.target.value)))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" data-testid={`input-variant-stock-${index}`} />
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={variant.is_available} onChange={(e) => updateVariant(index, "is_available", e.target.checked)} className="rounded" data-testid={`checkbox-variant-available-${index}`} />
-                  <span className="text-gray-600">Tersedia</span>
-                </label>
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-xs font-medium text-gray-500">Tampil di Toko</span>
+                  <button type="button" onClick={() => updateVariant(index, "is_available", !variant.is_available)} className={`w-10 h-5 rounded-full transition-colors duration-200 relative flex-shrink-0 ${variant.is_available ? "bg-green-500" : "bg-gray-300"}`} data-testid={`toggle-variant-available-${index}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${variant.is_available ? "translate-x-5" : "translate-x-0.5"}`} />
+                  </button>
+                  <span className={`text-xs font-medium ${variant.is_available ? "text-green-600" : "text-gray-400"}`}>{variant.is_available ? "Aktif" : "Nonaktif"}</span>
+                </div>
               </div>
             ))}
           </div>
