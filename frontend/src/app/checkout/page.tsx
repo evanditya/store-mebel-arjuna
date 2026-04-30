@@ -69,6 +69,7 @@ export default function CheckoutPage() {
   const [pickupEnabled, setPickupEnabled] = useState(false);
   const [pickupOpenTime, setPickupOpenTime] = useState("08:00");
   const [pickupCloseTime, setPickupCloseTime] = useState("17:00");
+  const [pickupDays, setPickupDays] = useState<string[]>(["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -116,6 +117,7 @@ export default function CheckoutPage() {
       setPickupEnabled(data.pickup_enabled || false);
       setPickupOpenTime(data.pickup_open_time || "08:00");
       setPickupCloseTime(data.pickup_close_time || "17:00");
+      setPickupDays(data.pickup_days || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]);
     }).catch(() => {});
     fetch("/api/payment/client-key").then((r) => r.json()).then((data) => {
       if (data.client_key) {
@@ -335,8 +337,13 @@ export default function CheckoutPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                   <div>
                     <p className="text-sm font-semibold text-green-800">Ambil di Toko — Gratis</p>
-                    <p className="text-sm text-green-700 mt-1">
-                      Jam operasional pengambilan: <strong>{pickupOpenTime} – {pickupCloseTime}</strong>
+                    {pickupDays.length > 0 && (
+                      <p className="text-sm text-green-700 mt-1">
+                        Hari: <strong>{pickupDays.join(", ")}</strong>
+                      </p>
+                    )}
+                    <p className="text-sm text-green-700 mt-0.5">
+                      Jam: <strong>{pickupOpenTime} – {pickupCloseTime}</strong>
                     </p>
                     <p className="text-xs text-green-600 mt-1">Barang bisa diambil setelah pesanan selesai diproses dan Anda mendapat konfirmasi.</p>
                   </div>

@@ -248,6 +248,7 @@ export default function SellerDashboard() {
     pickup_enabled: false,
     pickup_open: "08:00",
     pickup_close: "17:00",
+    pickup_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
@@ -401,6 +402,7 @@ export default function SellerDashboard() {
         pickup_enabled: data.pickup_enabled || false,
         pickup_open: data.pickup_open_time || "08:00",
         pickup_close: data.pickup_close_time || "17:00",
+        pickup_days: data.pickup_days || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
       });
     }).catch(() => {});
     loadBanners();
@@ -522,6 +524,7 @@ export default function SellerDashboard() {
           pickup_enabled: brandingForm.pickup_enabled,
           pickup_open_time: brandingForm.pickup_open,
           pickup_close_time: brandingForm.pickup_close,
+          pickup_days: brandingForm.pickup_days,
         }),
       });
       if (res.ok) {
@@ -547,6 +550,7 @@ export default function SellerDashboard() {
           pickup_enabled: brandingForm.pickup_enabled,
           pickup_open_time: brandingForm.pickup_open,
           pickup_close_time: brandingForm.pickup_close,
+          pickup_days: brandingForm.pickup_days,
         }),
       });
       if (res.ok) {
@@ -1256,6 +1260,7 @@ export default function SellerDashboard() {
                 <label className="flex items-center gap-3 cursor-pointer select-none">
                   <div
                     onClick={() => setBrandingForm((p) => ({ ...p, pickup_enabled: !p.pickup_enabled }))}
+                    data-testid="toggle-pickup-enabled"
                     className={`relative w-11 h-6 rounded-full transition-colors ${brandingForm.pickup_enabled ? "bg-gray-900" : "bg-gray-300"}`}
                   >
                     <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${brandingForm.pickup_enabled ? "translate-x-5" : "translate-x-0"}`} />
@@ -1266,28 +1271,61 @@ export default function SellerDashboard() {
                 </label>
 
                 {brandingForm.pickup_enabled && (
-                  <div className="flex items-center gap-4 mt-2">
+                  <div className="space-y-4 mt-2">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Jam Buka</label>
-                      <input
-                        type="time"
-                        value={brandingForm.pickup_open}
-                        onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_open: e.target.value }))}
-                        className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                      />
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Hari Operasional</label>
+                      <div className="flex flex-wrap gap-2">
+                        {["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"].map((day) => {
+                          const active = brandingForm.pickup_days.includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              data-testid={`btn-pickup-day-${day.toLowerCase()}`}
+                              data-active={active ? "true" : "false"}
+                              onClick={() => setBrandingForm((p) => ({
+                                ...p,
+                                pickup_days: p.pickup_days.includes(day)
+                                  ? p.pickup_days.filter((d) => d !== day)
+                                  : [...p.pickup_days, day],
+                              }))}
+                              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${active ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-300 hover:border-gray-500"}`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {brandingForm.pickup_days.length === 0 && (
+                        <p className="text-xs text-red-500 mt-1">Pilih setidaknya satu hari operasional.</p>
+                      )}
                     </div>
-                    <span className="text-gray-400 mt-5">—</span>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Jam Tutup</label>
-                      <input
-                        type="time"
-                        value={brandingForm.pickup_close}
-                        onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_close: e.target.value }))}
-                        className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                      />
-                    </div>
-                    <div className="mt-5 bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700">
-                      Jam operasional: <strong>{brandingForm.pickup_open} – {brandingForm.pickup_close}</strong>
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Jam Buka</label>
+                        <input
+                          type="time"
+                          value={brandingForm.pickup_open}
+                          onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_open: e.target.value }))}
+                          className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                      </div>
+                      <span className="text-gray-400 mt-5">—</span>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Jam Tutup</label>
+                        <input
+                          type="time"
+                          value={brandingForm.pickup_close}
+                          onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_close: e.target.value }))}
+                          className="border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                      </div>
+                      <div className="mt-5 bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700">
+                        {brandingForm.pickup_days.length > 0
+                          ? <>{brandingForm.pickup_days.join(", ")}, <strong>{brandingForm.pickup_open} – {brandingForm.pickup_close}</strong></>
+                          : <strong>{brandingForm.pickup_open} – {brandingForm.pickup_close}</strong>
+                        }
+                      </div>
                     </div>
                   </div>
                 )}
