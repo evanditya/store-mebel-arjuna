@@ -35,7 +35,7 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   const [quantity, setQuantity] = useState(1);
   const images = product.images.length > 0 ? product.images : [product.primary_image];
 
-  const displayVariants = useMemo(() => product.variants.filter((v) => v.variant_type !== "_combinations"), [product.variants]);
+  const displayVariants = useMemo(() => product.variants.filter((v) => v.variant_type !== "_combinations" && v.is_available !== false), [product.variants]);
   const combinations = useMemo(() => product.variants.filter((v) => v.variant_type === "_combinations"), [product.variants]);
 
   const variantTypes = useMemo(() => {

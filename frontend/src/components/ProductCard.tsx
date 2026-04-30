@@ -1,4 +1,4 @@
-interface Variant { variant_type?: string; price: number | null; original_price?: number | null; price_modifier: number; stock?: number; }
+interface Variant { variant_type?: string; price: number | null; original_price?: number | null; price_modifier: number; stock?: number; is_available?: boolean; }
 interface ProductCardProps {
   product: { name: string; slug: string; price: number; original_price: number | null; primary_image: string; sold_count: number; rating: number; stock?: number; variants?: Variant[] };
   formatPrice: (price: number) => string;
@@ -13,7 +13,7 @@ function getEffectiveBase(price: number, originalPrice: number | null): number {
 function getPriceRange(basePrice: number, originalPrice: number | null, variants?: Variant[]): { min: number; max: number } {
   const effectiveBase = getEffectiveBase(basePrice, originalPrice);
   if (!variants || variants.length === 0) return { min: effectiveBase, max: effectiveBase };
-  const filtered = variants.filter((v) => v.variant_type !== "_combinations");
+  const filtered = variants.filter((v) => v.variant_type !== "_combinations" && v.is_available !== false);
   if (filtered.length === 0) return { min: effectiveBase, max: effectiveBase };
   const prices = filtered.map((v) => {
     if (v.price != null) return (v.original_price != null && v.original_price < v.price) ? v.original_price : v.price;
@@ -28,10 +28,12 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
   const hasRange = min !== max;
 
   const realVariants = (product.variants || []).filter((v) => v.variant_type !== "_combinations");
-  const totalStock = realVariants.length > 0
-    ? realVariants.reduce((s, v) => s + (v.stock ?? 0), 0)
-    : (product.stock ?? null);
-  const isOutOfStock = totalStock != null && totalStock === 0;
+  const availableVariants = realVariants.filter((v) => v.is_available !== false);
+  const allVariantsUnavailable = realVariants.length > 0 && availableVariants.length === 0;
+  const totalStock = availableVariants.length > 0
+    ? availableVariants.reduce((s, v) => s + (v.stock ?? 0), 0)
+    : realVariants.length === 0 ? (product.stock ?? null) : 0;
+  const isOutOfStock = allVariantsUnavailable || (totalStock != null && totalStock === 0);
 
   return (
     <div
