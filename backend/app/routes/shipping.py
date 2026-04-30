@@ -109,17 +109,31 @@ def _get_allowed_couriers() -> list[str]:
     return [c["code"] for c in KNOWN_COURIERS]
 
 
-def get_seller_origin() -> dict:
+def get_seller_origin(db=None) -> dict:
+    """Return the seller's shipping origin.
+    Priority: DB user record (survives re-deploys) → seller_config.json → empty."""
+    if db is not None:
+        try:
+            from app.models import User
+            seller = db.query(User).filter(User.role == "seller").first()
+            if seller and seller.area_id:
+                return {
+                    "area_id": seller.area_id or "",
+                    "postal_code": seller.postal_code or "",
+                }
+        except Exception:
+            pass
     try:
         import os
         config_path = _seller_config_path()
         if os.path.exists(config_path):
             with open(config_path) as f:
                 sc = json.load(f)
-                return {
-                    "area_id": sc.get("area_id", ""),
-                    "postal_code": sc.get("postal_code", ""),
-                }
+                if sc.get("area_id"):
+                    return {
+                        "area_id": sc.get("area_id", ""),
+                        "postal_code": sc.get("postal_code", ""),
+                    }
     except Exception:
         pass
     return {"area_id": "", "postal_code": ""}
@@ -179,7 +193,7 @@ async def get_rates(request: Request, db: Session = Depends(get_db)):
 
     destination_postal_code = body.get("destination_postal_code", "")
 
-    origin = get_seller_origin()
+    origin = get_seller_origin(db)
     origin_area_id = body.get("origin_area_id", "") or origin.get("area_id", "") or FALLBACK_ORIGIN_AREA_ID
     origin_postal_code = body.get("origin_postal_code", "") or origin.get("postal_code", "") or FALLBACK_ORIGIN_POSTAL_CODE
 
