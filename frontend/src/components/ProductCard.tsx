@@ -10,22 +10,49 @@ function getEffectiveBase(price: number, originalPrice: number | null): number {
   return (originalPrice && originalPrice < price) ? originalPrice : price;
 }
 
-function getPriceRange(basePrice: number, originalPrice: number | null, variants?: Variant[]): { min: number; max: number } {
+function computePriceInfo(basePrice: number, originalPrice: number | null, variants?: Variant[]) {
   const effectiveBase = getEffectiveBase(basePrice, originalPrice);
-  if (!variants || variants.length === 0) return { min: effectiveBase, max: effectiveBase };
-  const filtered = variants.filter((v) => v.variant_type !== "_combinations" && v.is_available !== false);
-  if (filtered.length === 0) return { min: effectiveBase, max: effectiveBase };
-  const prices = filtered.map((v) => {
+  const active = (variants || []).filter((v) => v.variant_type !== "_combinations" && v.is_available !== false);
+
+  if (active.length === 0) {
+    const hasDisc = !!(originalPrice && originalPrice < basePrice);
+    return {
+      saleMin: effectiveBase, saleMax: effectiveBase,
+      origMin: hasDisc ? basePrice : null, origMax: hasDisc ? basePrice : null,
+      maxDiscPct: hasDisc ? Math.round((1 - effectiveBase / basePrice) * 100) : 0,
+    };
+  }
+
+  const salePrices = active.map((v) => {
     if (v.price != null) return (v.original_price != null && v.original_price < v.price) ? v.original_price : v.price;
     return effectiveBase + (v.price_modifier || 0);
   });
-  return { min: Math.min(...prices), max: Math.max(...prices) };
+  const fullPrices = active.map((v) => {
+    if (v.price != null) return v.price;
+    return basePrice + (v.price_modifier || 0);
+  });
+  const anyHasDisc = active.some((v) => v.price != null && v.original_price != null && v.original_price < v.price);
+  const maxDiscPct = anyHasDisc
+    ? Math.max(...active.map((v) => {
+        if (v.price != null && v.original_price != null && v.original_price < v.price)
+          return Math.round((1 - v.original_price / v.price) * 100);
+        return 0;
+      }))
+    : 0;
+
+  return {
+    saleMin: Math.min(...salePrices), saleMax: Math.max(...salePrices),
+    origMin: anyHasDisc ? Math.min(...fullPrices) : null,
+    origMax: anyHasDisc ? Math.max(...fullPrices) : null,
+    maxDiscPct,
+  };
 }
 
 export default function ProductCard({ product, formatPrice, formatSoldCount, onClick }: ProductCardProps) {
-  const hasDiscount = !!(product.original_price && product.original_price < product.price);
-  const { min, max } = getPriceRange(product.price, product.original_price, product.variants);
-  const hasRange = min !== max;
+  const { saleMin, saleMax, origMin, origMax, maxDiscPct } = computePriceInfo(product.price, product.original_price, product.variants);
+  const hasRange = saleMin !== saleMax;
+  const hasDiscount = maxDiscPct > 0;
+  const origRange = origMin != null && origMax != null;
 
   const realVariants = (product.variants || []).filter((v) => v.variant_type !== "_combinations");
   const availableVariants = realVariants.filter((v) => v.is_available !== false);
@@ -44,7 +71,7 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
       <div className="aspect-square relative">
         <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
         {hasDiscount && !isOutOfStock && (
-          <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{Math.round((1 - product.original_price! / product.price) * 100)}%</span>
+          <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{maxDiscPct}%</span>
         )}
         {isOutOfStock && (
           <div className="absolute inset-0 flex items-end justify-center pb-3 bg-black/20">
@@ -55,9 +82,13 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
       <div className="p-3">
         <h3 className="text-sm line-clamp-2 mb-1">{product.name}</h3>
         <p className={`font-bold text-sm ${isOutOfStock ? "text-gray-400" : "text-red-600"}`}>
-          {hasRange ? `${formatPrice(min)} - ${formatPrice(max)}` : formatPrice(min)}
+          {hasRange ? `${formatPrice(saleMin)} - ${formatPrice(saleMax)}` : formatPrice(saleMin)}
         </p>
-        {hasDiscount && !isOutOfStock && <p className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</p>}
+        {origRange && !isOutOfStock && (
+          <p className="text-xs text-gray-400 line-through">
+            {origMin !== origMax ? `${formatPrice(origMin!)} - ${formatPrice(origMax!)}` : formatPrice(origMin!)}
+          </p>
+        )}
         <div className="flex items-center justify-between mt-1 text-xs text-gray-400">
           <span>{formatSoldCount(product.sold_count)}</span>
           {!isOutOfStock && totalStock != null && totalStock <= 10 && (

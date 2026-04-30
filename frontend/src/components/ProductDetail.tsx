@@ -119,6 +119,16 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     return new Set(prices).size > 1;
   }, [displayVariants, effectiveBase]);
 
+  const strikeRange = useMemo(() => {
+    const active = displayVariants.filter((v) => v.is_available);
+    if (active.length === 0) return hasDiscount ? { min: product.price, max: product.price } : null;
+    const fullPrices = active.map((v) => (v.price != null ? v.price : product.price + (v.price_modifier || 0)));
+    const salePrices = active.map((v) => getVariantPrice(v, effectiveBase));
+    const anyDisc = active.some((_, i) => fullPrices[i] > salePrices[i]);
+    if (!anyDisc) return null;
+    return { min: Math.min(...fullPrices), max: Math.max(...fullPrices) };
+  }, [displayVariants, hasDiscount, product.price, effectiveBase]);
+
   const priceRange = useMemo(() => {
     if (combinations.length > 0) {
       const available = combinations.filter((c) => c.is_available);
@@ -222,6 +232,13 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
           )}
           {allVariantsSelected && !comboUnavailable && displayStrikePrice != null && (
             <p className="text-sm text-gray-400 line-through mb-2">{formatPrice(displayStrikePrice)}</p>
+          )}
+          {(!allVariantsSelected || comboUnavailable) && strikeRange != null && (
+            <p className="text-sm text-gray-400 line-through mb-2">
+              {strikeRange.min !== strikeRange.max
+                ? `${formatPrice(strikeRange.min)} – ${formatPrice(strikeRange.max)}`
+                : formatPrice(strikeRange.min)}
+            </p>
           )}
           {comboUnavailable && <p className="text-sm text-orange-500 mb-1">Kombinasi ini tidak tersedia, menggunakan harga dasar</p>}
           <div className="flex flex-wrap items-center gap-3 mb-4">
