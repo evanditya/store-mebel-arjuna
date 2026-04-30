@@ -35,8 +35,44 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   const [quantity, setQuantity] = useState(1);
   const images = product.images.length > 0 ? product.images : [product.primary_image];
 
-  const displayVariants = useMemo(() => product.variants.filter((v) => v.variant_type !== "_combinations" && v.is_available !== false), [product.variants]);
-  const combinations = useMemo(() => product.variants.filter((v) => v.variant_type === "_combinations"), [product.variants]);
+  // Detect new multi-group format: variant_type contains " / " (e.g. "Warna / Ukuran")
+  const isNewCombinationFormat = useMemo(() => {
+    const all = product.variants.filter((v) => v.variant_type !== "_combinations");
+    return all.length > 0 && (all[0].variant_type || "").includes(" / ");
+  }, [product.variants]);
+
+  // For new format: derive per-group display options + treat all variants as combinations.
+  // For old format: use existing logic (displayVariants per type, combinations via "_combinations" type).
+  const { displayVariants, combinations } = useMemo(() => {
+    if (!isNewCombinationFormat) {
+      return {
+        displayVariants: product.variants.filter((v) => v.variant_type !== "_combinations" && v.is_available !== false),
+        combinations: product.variants.filter((v) => v.variant_type === "_combinations"),
+      };
+    }
+    const allVars = product.variants.filter((v) => v.variant_type !== "_combinations");
+    if (allVars.length === 0) return { displayVariants: [], combinations: [] };
+    const typeNames = allVars[0].variant_type.split(" / ");
+    const seen = new Set<string>();
+    const dpv: Variant[] = [];
+    typeNames.forEach((typeName, idx) => {
+      allVars.forEach((v) => {
+        const val = (v.variant_name.split(" / ")[idx] || "").trim();
+        if (!val) return;
+        const key = `${typeName}___${val}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          const isAvail = allVars.some((cv) => {
+            const p = cv.variant_name.split(" / ");
+            return (p[idx] || "").trim() === val && cv.is_available !== false;
+          });
+          dpv.push({ variant_type: typeName, variant_name: val, price: null, original_price: null, price_modifier: 0, stock: 0, is_available: isAvail });
+        }
+      });
+    });
+    const combs = allVars.map((v) => ({ ...v, variant_type: "_combinations" }));
+    return { displayVariants: dpv, combinations: combs };
+  }, [isNewCombinationFormat, product.variants]);
 
   const variantTypes = useMemo(() => {
     const types: string[] = [];
@@ -114,20 +150,25 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   }, [selectedVariants, matchedCombo, displayVariants, variantTypes, hasDiscount, product.price]);
 
   const hasDifferentPrices = useMemo(() => {
-    if (displayVariants.length <= 1) return false;
-    const prices = displayVariants.filter((v) => v.is_available).map((v) => getVariantPrice(v, effectiveBase));
+    // For new combination format, check across combinations
+    const pool = isNewCombinationFormat
+      ? combinations.filter((c) => c.is_available)
+      : displayVariants.filter((v) => v.is_available);
+    if (pool.length <= 1) return false;
+    const prices = pool.map((v) => getVariantPrice(v, effectiveBase));
     return new Set(prices).size > 1;
-  }, [displayVariants, effectiveBase]);
+  }, [isNewCombinationFormat, combinations, displayVariants, effectiveBase]);
 
   const strikeRange = useMemo(() => {
-    const active = displayVariants.filter((v) => v.is_available);
+    const pool = isNewCombinationFormat ? combinations : displayVariants;
+    const active = pool.filter((v) => v.is_available);
     if (active.length === 0) return hasDiscount ? { min: product.price, max: product.price } : null;
     const fullPrices = active.map((v) => (v.price != null ? v.price : product.price + (v.price_modifier || 0)));
     const salePrices = active.map((v) => getVariantPrice(v, effectiveBase));
     const anyDisc = active.some((_, i) => fullPrices[i] > salePrices[i]);
     if (!anyDisc) return null;
     return { min: Math.min(...fullPrices), max: Math.max(...fullPrices) };
-  }, [displayVariants, hasDiscount, product.price, effectiveBase]);
+  }, [isNewCombinationFormat, combinations, displayVariants, hasDiscount, product.price, effectiveBase]);
 
   const priceRange = useMemo(() => {
     if (combinations.length > 0) {

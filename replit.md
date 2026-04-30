@@ -39,6 +39,15 @@ Currently migrates: `users.permissions TEXT` column.
 - `effective_stock(product)` helper in serializers computes from variants when present
 - Auto-synced on create, update, and Excel import
 
+### Variant Groups & Combinations (Seller CMS)
+- Seller defines variant **groups** (e.g. Warna, Ukuran) with **values** per group
+- System auto-generates cartesian product combinations (e.g. Merah/XL, Merah/L, Biru/XL, Biru/L)
+- Each combination row has its own price, discount price, stock, and is_available toggle
+- Stored flat in DB: `variant_type = "Warna / Ukuran"`, `variant_name = "Merah / XL"` (` / ` separator)
+- Single-group variants: `variant_type = "Warna"`, `variant_name = "Merah"` (no separator, old format also supported)
+- `ProductDetail` (buyer) detects multi-group format and shows per-group selection buttons
+- `display_order` column on `product_variants` ensures stable ordering after save/reload
+
 ### Variant Pricing
 - `variant.price` = Harga Asli (full price, shown crossed out)
 - `variant.original_price` = Harga Diskon (selling price, lower)
