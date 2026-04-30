@@ -309,7 +309,7 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
                       const isSelected = selectedVariants[type] === v.variant_name;
                       const comboAvailable = isOptionAvailableInCombos(type, v.variant_name);
                       const effectiveAvailable = v.is_available && comboAvailable;
-                      const stockLabel = !effectiveAvailable ? null : v.stock === 0 ? "Habis" : v.stock <= 5 ? `Sisa ${v.stock}` : null;
+                      const stockLabel = isNewCombinationFormat || !effectiveAvailable ? null : v.stock === 0 ? "Habis" : v.stock <= 5 ? `Sisa ${v.stock}` : null;
                       return (
                         <button
                           key={v.variant_name}
