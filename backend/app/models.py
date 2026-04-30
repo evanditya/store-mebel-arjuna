@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Integer, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Boolean, Text, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 from datetime import datetime
@@ -51,6 +51,7 @@ class Product(Base):
     video_url = Column(String, nullable=True)
     shopee_url = Column(String, nullable=True, index=True)
     is_available = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
 

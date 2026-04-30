@@ -219,9 +219,9 @@ async def list_products(
     total = query.distinct().count()
     page = max(1, page)
     limit = max(1, min(limit, 100))
-    # Out-of-stock products go to the end; within each group keep original DB order
+    # Out-of-stock products go to the end; within each group oldest (earliest created_at) first, new ones at the end
     stock_order = sa_case((Product.stock == 0, 1), else_=0)
-    products = query.distinct().order_by(stock_order).offset((page - 1) * limit).limit(limit).all()
+    products = query.distinct().order_by(stock_order, Product.created_at.nulls_last(), Product.id).offset((page - 1) * limit).limit(limit).all()
     seller = load_seller_config()
     return {
         "products": [product_to_list_dict(p) for p in products],

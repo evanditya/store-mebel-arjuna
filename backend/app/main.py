@@ -23,6 +23,9 @@ def _run_migrations():
         if "is_available" not in prod_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN is_available BOOLEAN DEFAULT TRUE"))
             conn.commit()
+        if "created_at" not in prod_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN created_at TIMESTAMP DEFAULT NOW()"))
+            conn.commit()
 
 
 @asynccontextmanager
