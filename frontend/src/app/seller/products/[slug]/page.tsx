@@ -253,9 +253,6 @@ export default function EditProductPage() {
         </div>
       </header>
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {error && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm" data-testid="text-error">{error}</div>}
-        {success && <div className="bg-green-50 text-green-600 px-4 py-3 rounded-lg mb-4 text-sm" data-testid="text-success">{success}</div>}
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="bg-white rounded-lg border p-4 space-y-4">
             <h2 className="font-bold text-sm text-gray-500 uppercase tracking-wide">Informasi Produk</h2>
@@ -444,6 +441,8 @@ export default function EditProductPage() {
             ))}
           </div>
 
+          {error && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm" data-testid="text-error">{error}</div>}
+          {success && <div className="bg-green-50 text-green-600 px-4 py-3 rounded-lg text-sm" data-testid="text-success">{success}</div>}
           <button type="submit" disabled={saving} className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition disabled:opacity-50" data-testid="button-save-product">
             {saving ? "Menyimpan..." : isNew ? "Tambah Produk" : "Simpan Perubahan"}
           </button>
