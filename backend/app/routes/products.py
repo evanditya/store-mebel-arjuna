@@ -183,6 +183,7 @@ def product_to_list_dict(product: Product) -> dict:
         "stock": effective_stock(product),
         "rating": product.rating,
         "primary_image": resolve_primary_image(product),
+        "is_available": product.is_available if product.is_available is not None else True,
         "variants": [
             {
                 "variant_type": v.variant_type,
@@ -204,10 +205,13 @@ async def list_products(
     search: str = None,
     page: int = 1,
     limit: int = 20,
+    include_inactive: bool = False,
     db: Session = Depends(get_db),
 ):
     from sqlalchemy import case as sa_case
     query = db.query(Product).options(joinedload(Product.variants), joinedload(Product.images))
+    if not include_inactive:
+        query = query.filter((Product.is_available == True) | (Product.is_available == None))
     if category:
         query = query.filter(Product.category == category)
     if search:
@@ -625,7 +629,7 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
     if not product:
         return JSONResponse({"error": "Produk tidak ditemukan"}, status_code=404)
     body = await request.json()
-    for field in ["name", "price", "original_price", "category", "description", "stock", "rating", "weight", "length", "width", "height", "primary_image", "video_url", "sold_count"]:
+    for field in ["name", "price", "original_price", "category", "description", "stock", "rating", "weight", "length", "width", "height", "primary_image", "video_url", "sold_count", "is_available"]:
         if field in body:
             setattr(product, field, body[field])
 

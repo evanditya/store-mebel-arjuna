@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 const BannerCropper = dynamic(() => import("@/components/BannerCropper"), { ssr: false });
 
 interface ProductVariantStock { id?: string; variant_type: string; variant_name: string; stock: number; is_available: boolean; }
-interface Product { id?: string; name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; variants?: ProductVariantStock[]; }
+interface Product { id?: string; name: string; slug: string; price: number; stock: number; category: string; primary_image: string; sold_count: number; is_available?: boolean; variants?: ProductVariantStock[]; }
 interface Banner {
   id: number;
   image_url: string;
@@ -275,7 +275,7 @@ export default function SellerDashboard() {
 
   const loadProducts = async (page: number, search: string) => {
     setProductLoading(true);
-    const params = new URLSearchParams({ page: String(page), limit: "20" });
+    const params = new URLSearchParams({ page: String(page), limit: "20", include_inactive: "true" });
     if (search.trim()) params.set("search", search.trim());
     const res = await fetch(`/api/products?${params}`);
     const data = await res.json();
@@ -584,6 +584,15 @@ export default function SellerDashboard() {
 
   const handleDelete = async (slug: string) => { if (!confirm("Hapus produk ini?")) return; const res = await fetch(`/api/products/${slug}`, { method: "DELETE" }); if (res.ok) loadProducts(productPage, productSearch); };
 
+  const handleToggleAvailability = async (product: Product) => {
+    await fetch(`/api/products/${product.slug}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_available: !(product.is_available !== false) }),
+    });
+    loadProducts(productPage, productSearch);
+  };
+
   const handleExcelExport = () => { window.open("/api/products/export-excel", "_blank"); };
 
   const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -802,7 +811,7 @@ export default function SellerDashboard() {
                       return next;
                     });
                     return (
-                      <div key={product.slug} className="bg-white rounded-lg border overflow-hidden" data-testid={`product-row-${product.slug}`}>
+                      <div key={product.slug} className={`bg-white rounded-lg border overflow-hidden ${product.is_available === false ? "opacity-60" : ""}`} data-testid={`product-row-${product.slug}`}>
                         <div className="p-4 flex items-center gap-4">
                           <img
                             src={product.primary_image || "/images/placeholder.svg"}
@@ -811,7 +820,10 @@ export default function SellerDashboard() {
                             onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/placeholder.svg"; }}
                           />
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-medium truncate">{product.name}</h3>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h3 className="font-medium truncate">{product.name}</h3>
+                              {product.is_available === false && <span className="flex-shrink-0 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-medium">Nonaktif</span>}
+                            </div>
                             <p className="text-sm text-gray-500">{product.category}</p>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm items-center">
                               <span className="text-red-600 font-medium">{formatPrice(product.price)}</span>
@@ -830,6 +842,7 @@ export default function SellerDashboard() {
                             </div>
                           </div>
                           <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={() => handleToggleAvailability(product)} className={`px-3 py-1.5 rounded-lg text-sm transition ${product.is_available === false ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"}`} data-testid={`button-toggle-available-${product.slug}`}>{product.is_available === false ? "Aktifkan" : "Nonaktifkan"}</button>
                             <Link href={`/seller/products/${product.slug}`} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-testid={`button-edit-${product.slug}`}>Edit</Link>
                             <button onClick={() => handleDelete(product.slug)} className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition" data-testid={`button-delete-${product.slug}`}>Hapus</button>
                           </div>

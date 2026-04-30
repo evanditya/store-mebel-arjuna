@@ -20,6 +20,9 @@ def _run_migrations():
         if "shopee_url" not in prod_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN shopee_url VARCHAR"))
             conn.commit()
+        if "is_available" not in prod_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN is_available BOOLEAN DEFAULT TRUE"))
+            conn.commit()
 
 
 @asynccontextmanager
