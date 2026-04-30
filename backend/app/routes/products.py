@@ -604,13 +604,14 @@ async def create_product(request: Request, db: Session = Depends(get_db)):
     db.add(product)
     for img in body.get("images", []):
         db.add(ProductImage(id=gen_id(), product_id=product.id, image_url=img.get("image_url", img if isinstance(img, str) else ""), display_order=img.get("display_order", 0) if isinstance(img, dict) else 0))
-    for v in body.get("variants", []):
+    for idx, v in enumerate(body.get("variants", [])):
         db.add(ProductVariant(
             id=gen_id(), product_id=product.id,
             variant_type=v.get("variant_type"), variant_name=v.get("variant_name", ""),
             price=v.get("price"), original_price=v.get("original_price"),
             price_modifier=v.get("price_modifier", 0),
             stock=v.get("stock", 0), is_available=v.get("is_available", True),
+            display_order=idx,
         ))
     real_vars = [v for v in body.get("variants", []) if v.get("variant_type") != "_combinations"]
     if real_vars:
@@ -635,7 +636,7 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
 
     if "variants" in body:
         db.query(ProductVariant).filter(ProductVariant.product_id == product.id).delete()
-        for v in body["variants"]:
+        for idx, v in enumerate(body["variants"]):
             db.add(ProductVariant(
                 id=gen_id(), product_id=product.id,
                 variant_type=v.get("variant_type", ""),
@@ -645,6 +646,7 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
                 price_modifier=v.get("price_modifier", 0),
                 stock=v.get("stock", 0),
                 is_available=v.get("is_available", True),
+                display_order=idx,
             ))
         real_vars = [v for v in body["variants"] if v.get("variant_type") != "_combinations"]
         if real_vars:

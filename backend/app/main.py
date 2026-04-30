@@ -26,6 +26,10 @@ def _run_migrations():
         if "created_at" not in prod_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN created_at TIMESTAMP DEFAULT NOW()"))
             conn.commit()
+        var_cols = [c["name"] for c in inspector.get_columns("product_variants")]
+        if "display_order" not in var_cols:
+            conn.execute(text("ALTER TABLE product_variants ADD COLUMN display_order INTEGER DEFAULT 0"))
+            conn.commit()
 
 
 @asynccontextmanager

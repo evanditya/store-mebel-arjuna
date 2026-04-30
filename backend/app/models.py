@@ -76,7 +76,8 @@ class ProductVariant(Base):
     price_modifier = Column(Float, default=0.0)
     stock = Column(Integer, default=0)
     is_available = Column(Boolean, default=True)
-    product = relationship("Product", back_populates="variants")
+    display_order = Column(Integer, default=0)
+    product = relationship("Product", back_populates="variants", order_by="ProductVariant.display_order")
 
 
 class CartItem(Base):
