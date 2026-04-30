@@ -17,7 +17,7 @@ interface Variant {
   price: number | null;
   original_price: number | null;
   price_modifier: number;
-  stock: number;
+  stock: number | null;
   is_available: boolean;
 }
 
@@ -66,6 +66,7 @@ export default function EditProductPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+  const [variantFieldErrors, setVariantFieldErrors] = useState<Record<number, { type?: boolean; stock?: boolean }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -159,7 +160,7 @@ export default function EditProductPage() {
   };
 
   const addVariant = () => {
-    setVariants((prev) => [...prev, { variant_type: "Pilihan", variant_name: "", price: null, original_price: null, price_modifier: 0, stock: 0, is_available: true }]);
+    setVariants((prev) => [...prev, { variant_type: "", variant_name: "", price: null, original_price: null, price_modifier: 0, stock: null, is_available: true }]);
   };
 
   const updateVariant = (index: number, field: string, value: string | number | boolean | null) => {
@@ -189,6 +190,22 @@ export default function EditProductPage() {
       return;
     }
     setFieldErrors({});
+
+    // Validate variants — each named variant needs type + stock
+    const vErrors: Record<number, { type?: boolean; stock?: boolean }> = {};
+    variants.forEach((v, i) => {
+      if (!v.variant_name.trim()) return;
+      const e: { type?: boolean; stock?: boolean } = {};
+      if (!v.variant_type.trim()) e.type = true;
+      if (v.stock === null || v.stock === undefined) e.stock = true;
+      if (Object.keys(e).length) vErrors[i] = e;
+    });
+    if (Object.keys(vErrors).length > 0) {
+      setVariantFieldErrors(vErrors);
+      setError("Harap lengkapi Tipe Varian dan Stok untuk setiap varian yang ditambahkan.");
+      return;
+    }
+    setVariantFieldErrors({});
 
     setSaving(true);
     try {
@@ -399,7 +416,7 @@ export default function EditProductPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Tipe Varian</label>
-                    <input type="text" value={variant.variant_type} onChange={(e) => updateVariant(index, "variant_type", e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Warna / Ukuran" data-testid={`input-variant-type-${index}`} />
+                    <input type="text" value={variant.variant_type} onChange={(e) => { updateVariant(index, "variant_type", e.target.value); setVariantFieldErrors((p) => ({ ...p, [index]: { ...p[index], type: false } })); }} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${variantFieldErrors[index]?.type ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="Warna / Ukuran" data-testid={`input-variant-type-${index}`} />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Nama Varian</label>
@@ -425,7 +442,7 @@ export default function EditProductPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Stok</label>
-                    <input type="text" inputMode="numeric" value={fmtNum(variant.stock)} onChange={(e) => updateVariant(index, "stock", Math.max(0, Number(stripFmt(e.target.value)) || 0))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="0" data-testid={`input-variant-stock-${index}`} />
+                    <input type="text" inputMode="numeric" value={variant.stock === null || variant.stock === undefined ? "" : fmtNum(variant.stock)} onChange={(e) => { const r = stripFmt(e.target.value); updateVariant(index, "stock", r ? Math.max(0, Number(r)) : null); setVariantFieldErrors((p) => ({ ...p, [index]: { ...p[index], stock: false } })); }} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${variantFieldErrors[index]?.stock ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid={`input-variant-stock-${index}`} />
                   </div>
                 </div>
                 <div className="flex items-center gap-4 pt-1">
