@@ -239,7 +239,7 @@ export default function EditProductPage() {
               <div className="flex-shrink-0 flex flex-col items-center gap-1 pt-5">
                 <span className="text-xs font-medium text-gray-500">Tampil di Toko</span>
                 <button type="button" onClick={() => setIsAvailable((v) => !v)} className={`w-12 h-6 rounded-full transition-colors duration-200 relative ${isAvailable ? "bg-green-500" : "bg-gray-300"}`} data-testid="toggle-product-available">
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isAvailable ? "translate-x-6" : "translate-x-0.5"}`} />
+                  <span className={`absolute top-0.5 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isAvailable ? "translate-x-6" : "translate-x-0.5"}`} />
                 </button>
                 <span className={`text-xs font-medium ${isAvailable ? "text-green-600" : "text-gray-400"}`}>{isAvailable ? "Aktif" : "Nonaktif"}</span>
               </div>
@@ -407,7 +407,7 @@ export default function EditProductPage() {
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-xs font-medium text-gray-500">Tampil di Toko</span>
                     <button type="button" onClick={() => updateVariant(index, "is_available", !variant.is_available)} className={`w-12 h-6 rounded-full transition-colors duration-200 relative ${variant.is_available ? "bg-green-500" : "bg-gray-300"}`} data-testid={`toggle-variant-available-${index}`}>
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${variant.is_available ? "translate-x-6" : "translate-x-0.5"}`} />
+                      <span className={`absolute top-0.5 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${variant.is_available ? "translate-x-6" : "translate-x-0.5"}`} />
                     </button>
                     <span className={`text-xs font-medium ${variant.is_available ? "text-green-600" : "text-gray-400"}`}>{variant.is_available ? "Aktif" : "Nonaktif"}</span>
                   </div>
