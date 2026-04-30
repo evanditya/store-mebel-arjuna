@@ -25,6 +25,17 @@ function formatPrice(price: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
 }
 
+function fmtNum(val: string | number | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "";
+  const num = parseInt(String(val).replace(/[^0-9]/g, ""), 10);
+  if (isNaN(num)) return "";
+  return num.toLocaleString("id-ID");
+}
+
+function stripFmt(val: string): string {
+  return val.replace(/[^0-9]/g, "");
+}
+
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
@@ -247,7 +258,7 @@ export default function EditProductPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Harga Asli (Rp)</label>
-                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-price" />
+                <input type="text" inputMode="numeric" value={fmtNum(price)} onChange={(e) => setPrice(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" required data-testid="input-product-price" />
               </div>
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
@@ -261,15 +272,15 @@ export default function EditProductPage() {
                     )}
                   </div>
                 </label>
-                <input type="number" value={originalPrice} onChange={(e) => setOriginalPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="Opsional" data-testid="input-product-original-price" />
+                <input type="text" inputMode="numeric" value={fmtNum(originalPrice)} onChange={(e) => setOriginalPrice(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-original-price" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
                 {variants.filter((v) => v.variant_name.trim()).length > 0 ? (
                   <>
                     <input
-                      type="number"
-                      value={variants.filter((v) => v.variant_name.trim()).reduce((sum, v) => sum + (v.stock || 0), 0)}
+                      type="text"
+                      value={fmtNum(variants.filter((v) => v.variant_name.trim()).reduce((sum, v) => sum + (v.stock || 0), 0))}
                       readOnly
                       className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none"
                       data-testid="input-product-stock"
@@ -277,26 +288,26 @@ export default function EditProductPage() {
                     <p className="text-xs text-gray-400 mt-1">Total otomatis dari stok varian</p>
                   </>
                 ) : (
-                  <input type="number" value={stock} min="0" placeholder="0" onChange={(e) => setStock(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
+                  <input type="text" inputMode="numeric" value={fmtNum(stock)} placeholder="0" onChange={(e) => setStock(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-stock" />
                 )}
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Berat (gram)</label>
-                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" min="1" data-testid="input-product-weight" />
+                <input type="text" inputMode="numeric" value={fmtNum(weight)} onChange={(e) => setWeight(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-weight" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Panjang (cm)</label>
-                <input type="number" value={length} onChange={(e) => setLength(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" min="1" data-testid="input-product-length" />
+                <input type="text" inputMode="numeric" value={fmtNum(length)} onChange={(e) => setLength(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-length" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Lebar (cm)</label>
-                <input type="number" value={width} onChange={(e) => setWidth(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" min="1" data-testid="input-product-width" />
+                <input type="text" inputMode="numeric" value={fmtNum(width)} onChange={(e) => setWidth(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-width" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tinggi (cm)</label>
-                <input type="number" value={height} onChange={(e) => setHeight(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" min="1" data-testid="input-product-height" />
+                <input type="text" inputMode="numeric" value={fmtNum(height)} onChange={(e) => setHeight(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-height" />
               </div>
             </div>
             <div>
@@ -382,7 +393,7 @@ export default function EditProductPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Harga Asli (Rp)</label>
-                    <input type="number" value={variant.price ?? ""} onChange={(e) => updateVariant(index, "price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Kosongkan = ikut harga utama" data-testid={`input-variant-price-${index}`} />
+                    <input type="text" inputMode="numeric" value={fmtNum(variant.price ?? "")} onChange={(e) => { const r = stripFmt(e.target.value); updateVariant(index, "price", r ? Number(r) : null); }} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="0" data-testid={`input-variant-price-${index}`} />
                   </div>
                   <div>
                     <label className="flex items-center gap-1 text-xs text-gray-500 mb-1">
@@ -396,11 +407,11 @@ export default function EditProductPage() {
                         )}
                       </div>
                     </label>
-                    <input type="number" value={variant.original_price ?? ""} onChange={(e) => updateVariant(index, "original_price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Opsional" data-testid={`input-variant-original-price-${index}`} />
+                    <input type="text" inputMode="numeric" value={fmtNum(variant.original_price ?? "")} onChange={(e) => { const r = stripFmt(e.target.value); updateVariant(index, "original_price", r ? Number(r) : null); }} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="0" data-testid={`input-variant-original-price-${index}`} />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Stok</label>
-                    <input type="number" value={variant.stock} min="0" onChange={(e) => updateVariant(index, "stock", Math.max(0, Number(e.target.value)))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" data-testid={`input-variant-stock-${index}`} />
+                    <input type="text" inputMode="numeric" value={fmtNum(variant.stock)} onChange={(e) => updateVariant(index, "stock", Math.max(0, Number(stripFmt(e.target.value)) || 0))} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="0" data-testid={`input-variant-stock-${index}`} />
                   </div>
                 </div>
                 <div className="flex items-center gap-4 pt-1">
