@@ -219,9 +219,9 @@ async def list_products(
     total = query.distinct().count()
     page = max(1, page)
     limit = max(1, min(limit, 100))
-    # Out-of-stock products go to the end; within each group oldest (earliest created_at) first, new ones at the end
+    # Out-of-stock products go to the end; within each group newest first (top-left = most recently added)
     stock_order = sa_case((Product.stock == 0, 1), else_=0)
-    products = query.distinct().order_by(stock_order, Product.created_at.nulls_last(), Product.id).offset((page - 1) * limit).limit(limit).all()
+    products = query.distinct().order_by(stock_order, Product.created_at.desc().nulls_last(), Product.id.desc()).offset((page - 1) * limit).limit(limit).all()
     seller = load_seller_config()
     return {
         "products": [product_to_list_dict(p) for p in products],
@@ -753,9 +753,9 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
                         product.slug = base_slug
                         product.weight = 500
                         product.length = product.width = product.height = 10
-                        # Preserve Shopee order: each new product gets a timestamp
-                        # offset by its position in the file so they sort correctly
-                        product.created_at = sync_base_time + _td(milliseconds=idx)
+                        # Preserve Shopee order: sort is newest-first, so the first
+                        # product in the file needs the largest timestamp (total - idx)
+                        product.created_at = sync_base_time + _td(milliseconds=(len(products_list) - idx))
 
                     product.name = name
                     product.price = price
