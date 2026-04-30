@@ -102,7 +102,7 @@ def _get_allowed_couriers() -> list[str]:
             with open(path) as f:
                 cfg = json.load(f)
             allowed = cfg.get("allowed_couriers")
-            if isinstance(allowed, list) and allowed:
+            if isinstance(allowed, list):
                 return allowed
     except Exception:
         pass
@@ -170,6 +170,9 @@ async def get_rates(request: Request, db: Session = Depends(get_db)):
     items = body.get("items", [])
     allowed = _get_allowed_couriers()
     couriers = body.get("couriers") or ",".join(allowed)
+
+    if not couriers:
+        return {"rates": []}
 
     if not destination_area_id:
         return JSONResponse({"error": "Area tujuan diperlukan"}, status_code=400)
