@@ -48,10 +48,10 @@ export default function EditProductPage() {
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
   const [stock, setStock] = useState("0");
-  const [weight, setWeight] = useState("500");
-  const [length, setLength] = useState("10");
-  const [width, setWidth] = useState("10");
-  const [height, setHeight] = useState("10");
+  const [weight, setWeight] = useState("");
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -65,6 +65,7 @@ export default function EditProductPage() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -171,9 +172,25 @@ export default function EditProductPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
     setError("");
     setSuccess("");
+
+    // Validate all required numeric fields
+    const missing: Record<string, boolean> = {};
+    if (!price || Number(price) <= 0) missing.price = true;
+    if (!weight || Number(weight) <= 0) missing.weight = true;
+    if (!length || Number(length) <= 0) missing.length = true;
+    if (!width || Number(width) <= 0) missing.width = true;
+    if (!height || Number(height) <= 0) missing.height = true;
+    if (Object.keys(missing).length > 0) {
+      setFieldErrors(missing);
+      const labels: Record<string, string> = { price: "Harga Asli", weight: "Berat", length: "Panjang", width: "Lebar", height: "Tinggi" };
+      setError("Harap isi: " + Object.keys(missing).map((k) => labels[k]).join(", "));
+      return;
+    }
+    setFieldErrors({});
+
+    setSaving(true);
     try {
       const body: Record<string, unknown> = {
         name,
@@ -182,10 +199,10 @@ export default function EditProductPage() {
         stock: variants.filter((v) => v.variant_name.trim()).length > 0
           ? variants.filter((v) => v.variant_name.trim()).reduce((sum, v) => sum + (v.stock || 0), 0)
           : Number(stock),
-        weight: Number(weight) || 500,
-        length: Number(length) || 10,
-        width: Number(width) || 10,
-        height: Number(height) || 10,
+        weight: Number(weight),
+        length: Number(length),
+        width: Number(width),
+        height: Number(height),
         category,
         description,
         video_url: videoUrl || null,
@@ -258,7 +275,7 @@ export default function EditProductPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Harga Asli (Rp)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(price)} onChange={(e) => setPrice(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" required data-testid="input-product-price" />
+                <input type="text" inputMode="numeric" value={fmtNum(price)} onChange={(e) => { setPrice(stripFmt(e.target.value)); setFieldErrors((p) => ({ ...p, price: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.price ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-price" />
               </div>
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
@@ -295,19 +312,19 @@ export default function EditProductPage() {
             <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Berat (gram)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(weight)} onChange={(e) => setWeight(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-weight" />
+                <input type="text" inputMode="numeric" value={fmtNum(weight)} onChange={(e) => { setWeight(stripFmt(e.target.value)); setFieldErrors((p) => ({ ...p, weight: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.weight ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-weight" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Panjang (cm)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(length)} onChange={(e) => setLength(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-length" />
+                <input type="text" inputMode="numeric" value={fmtNum(length)} onChange={(e) => { setLength(stripFmt(e.target.value)); setFieldErrors((p) => ({ ...p, length: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.length ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-length" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Lebar (cm)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(width)} onChange={(e) => setWidth(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-width" />
+                <input type="text" inputMode="numeric" value={fmtNum(width)} onChange={(e) => { setWidth(stripFmt(e.target.value)); setFieldErrors((p) => ({ ...p, width: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.width ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-width" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tinggi (cm)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(height)} onChange={(e) => setHeight(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-height" />
+                <input type="text" inputMode="numeric" value={fmtNum(height)} onChange={(e) => { setHeight(stripFmt(e.target.value)); setFieldErrors((p) => ({ ...p, height: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.height ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-height" />
               </div>
             </div>
             <div>
