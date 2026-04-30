@@ -65,6 +65,7 @@ export default function CheckoutPage() {
   const [loadingRates, setLoadingRates] = useState(false);
   const [ratesError, setRatesError] = useState("");
   const [shippingAvailable, setShippingAvailable] = useState(false);
+  const [hasCouriers, setHasCouriers] = useState(true);
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
   const [pickupEnabled, setPickupEnabled] = useState(false);
   const [pickupOpenTime, setPickupOpenTime] = useState("08:00");
@@ -113,6 +114,11 @@ export default function CheckoutPage() {
       }
     });
     fetch("/api/shipping/status").then((r) => r.json()).then((data) => setShippingAvailable(data.available)).catch(() => {});
+    fetch("/api/shipping/allowed-couriers").then((r) => r.json()).then((data) => {
+      const has = Array.isArray(data.allowed_couriers) && data.allowed_couriers.length > 0;
+      setHasCouriers(has);
+      if (!has) setDeliveryType("pickup");
+    }).catch(() => {});
     fetch("/api/branding").then((r) => r.json()).then((data) => {
       setPickupEnabled(data.pickup_enabled || false);
       setPickupOpenTime(data.pickup_open_time || "08:00");
@@ -304,14 +310,14 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {(shippingAvailable || pickupEnabled) && (
+        {((shippingAvailable && hasCouriers) || pickupEnabled) && (
           <div className="bg-white rounded-lg border p-4">
             <div className="flex items-center gap-2 mb-3">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
               <h2 className="font-bold">Metode Pengiriman</h2>
             </div>
             <div className="flex gap-2 mb-4">
-              {shippingAvailable && (
+              {shippingAvailable && hasCouriers && (
                 <button
                   onClick={() => setDeliveryType("delivery")}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-medium border-2 transition ${deliveryType === "delivery" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
@@ -459,7 +465,7 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {!shippingAvailable && !pickupEnabled && (
+        {!(shippingAvailable && hasCouriers) && !pickupEnabled && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
             <p className="font-medium mb-1">Pengiriman Belum Dikonfigurasi</p>
             <p>Ongkos kirim akan dihitung manual oleh penjual. Tambahkan <code className="bg-yellow-100 px-1 rounded">BITESHIP_API_KEY</code> di Secrets untuk mengaktifkan kalkulasi ongkir otomatis.</p>
