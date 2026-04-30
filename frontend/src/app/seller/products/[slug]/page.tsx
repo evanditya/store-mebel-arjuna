@@ -31,6 +31,8 @@ export default function EditProductPage() {
   const slug = params.slug as string;
   const isNew = slug === "new";
 
+  const [showProductDiscountTip, setShowProductDiscountTip] = useState(false);
+  const [openVariantTip, setOpenVariantTip] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
@@ -236,8 +238,17 @@ export default function EditProductPage() {
                 <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" required data-testid="input-product-price" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Harga Diskon (Rp)</label>
-                <p className="text-xs text-gray-400 mb-1">Jika diisi, harga asli dicoret & harga diskon jadi harga jual</p>
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                  Harga Diskon (Rp) <span className="font-normal text-gray-400">(Opsional)</span>
+                  <div className="relative">
+                    <button type="button" onClick={() => setShowProductDiscountTip((v) => !v)} className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none flex-shrink-0">!</button>
+                    {showProductDiscountTip && (
+                      <div className="absolute left-0 top-5 z-20 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600 font-normal">
+                        Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
+                      </div>
+                    )}
+                  </div>
+                </label>
                 <input type="number" value={originalPrice} onChange={(e) => setOriginalPrice(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="Opsional" data-testid="input-product-original-price" />
               </div>
               <div>
@@ -362,8 +373,18 @@ export default function EditProductPage() {
                     <input type="number" value={variant.price ?? ""} onChange={(e) => updateVariant(index, "price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Kosongkan = ikut harga utama" data-testid={`input-variant-price-${index}`} />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Harga Diskon (Rp)</label>
-                    <input type="number" value={variant.original_price ?? ""} onChange={(e) => updateVariant(index, "original_price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Kosongkan jika tidak ada diskon" data-testid={`input-variant-original-price-${index}`} />
+                    <label className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                      Harga Diskon (Rp) <span className="text-gray-400">(Opsional)</span>
+                      <div className="relative">
+                        <button type="button" onClick={() => setOpenVariantTip(openVariantTip === index ? null : index)} className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[9px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none flex-shrink-0">!</button>
+                        {openVariantTip === index && (
+                          <div className="absolute left-0 top-4 z-20 w-52 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600 font-normal">
+                            Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                    <input type="number" value={variant.original_price ?? ""} onChange={(e) => updateVariant(index, "original_price", e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-gray-900" placeholder="Opsional" data-testid={`input-variant-original-price-${index}`} />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Stok</label>
