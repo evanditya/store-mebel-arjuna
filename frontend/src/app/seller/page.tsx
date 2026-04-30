@@ -415,7 +415,6 @@ export default function SellerDashboard() {
   };
 
   const saveCouriers = async () => {
-    if (allowedCouriers.length === 0) { setCourierMsg("Pilih minimal satu kurir"); return; }
     setCourierSaving(true); setCourierMsg("");
     const res = await fetch("/api/shipping/allowed-couriers", {
       method: "PUT",
@@ -1396,7 +1395,7 @@ export default function SellerDashboard() {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={saveCouriers}
-                        disabled={courierSaving || allowedCouriers.length === 0}
+                        disabled={courierSaving}
                         className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
                       >
                         {courierSaving ? "Menyimpan..." : `Simpan Kurir (${allowedCouriers.length} dipilih)`}

@@ -149,8 +149,6 @@ async def set_allowed_couriers(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Format tidak valid"}, status_code=400)
     valid_codes = {c["code"] for c in KNOWN_COURIERS}
     allowed = [c for c in allowed if c in valid_codes]
-    if not allowed:
-        return JSONResponse({"error": "Pilih minimal satu kurir"}, status_code=400)
     import os
     path = _seller_config_path()
     cfg = {}
