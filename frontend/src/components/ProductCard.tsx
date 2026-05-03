@@ -12,7 +12,12 @@ function getEffectiveBase(price: number, originalPrice: number | null): number {
 
 function computePriceInfo(basePrice: number, originalPrice: number | null, variants?: Variant[]) {
   const effectiveBase = getEffectiveBase(basePrice, originalPrice);
-  const active = (variants || []).filter((v) => v.variant_type !== "_combinations" && v.is_available !== false);
+  // Multi-level products: real prices live in `_combinations` rows. Series/Ukuran
+  // rows hold display labels with possibly bogus/range prices, so prefer combos.
+  const combos = (variants || []).filter((v) => v.variant_type === "_combinations" && v.is_available !== false);
+  const active = combos.length > 0
+    ? combos
+    : (variants || []).filter((v) => v.variant_type !== "_combinations" && v.is_available !== false);
 
   if (active.length === 0) {
     const hasDisc = !!(originalPrice && originalPrice < basePrice);

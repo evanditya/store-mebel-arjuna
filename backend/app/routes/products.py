@@ -823,7 +823,11 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
     queue: asyncio.Queue = asyncio.Queue()
 
     def _parse_price(val: str) -> float:
-        cleaned = re.sub(r"[^\d]", "", str(val))
+        # Handle ranges like "Rp5.500.000 - Rp9.790.000" → take lower bound.
+        s = str(val)
+        if "-" in s:
+            s = s.split("-")[0]
+        cleaned = re.sub(r"[^\d]", "", s)
         return float(cleaned) if cleaned else 0.0
 
     def _parse_sold(val: str) -> int:
