@@ -148,7 +148,14 @@ def generate_slug(name: str) -> str:
 
 
 def effective_stock(product: Product) -> int:
-    """Return computed stock: sum of non-combination variant stocks if variants exist, else product.stock."""
+    """Return computed stock.
+    For multi-level products the real stock lives in `_combinations` rows
+    (Series/Ukuran rows are display-only labels with stock=0). Prefer those
+    if present; otherwise sum the single-level variant rows; else product.stock.
+    """
+    combos = [v for v in product.variants if v.variant_type == "_combinations"]
+    if combos:
+        return sum(v.stock or 0 for v in combos)
     real_variants = [v for v in product.variants if v.variant_type != "_combinations"]
     if real_variants:
         return sum(v.stock or 0 for v in real_variants)
@@ -157,6 +164,10 @@ def effective_stock(product: Product) -> int:
 
 def sync_product_stock(product: Product) -> None:
     """Write effective_stock back to product.stock so DB stays in sync."""
+    combos = [v for v in product.variants if v.variant_type == "_combinations"]
+    if combos:
+        product.stock = sum(v.stock or 0 for v in combos)
+        return
     real_variants = [v for v in product.variants if v.variant_type != "_combinations"]
     if real_variants:
         product.stock = sum(v.stock or 0 for v in real_variants)
@@ -613,9 +624,13 @@ async def create_product(request: Request, db: Session = Depends(get_db)):
             stock=v.get("stock", 0), is_available=v.get("is_available", True),
             display_order=idx,
         ))
-    real_vars = [v for v in body.get("variants", []) if v.get("variant_type") != "_combinations"]
-    if real_vars:
-        product.stock = sum(v.get("stock", 0) or 0 for v in real_vars)
+    all_vars = body.get("variants", []) or []
+    combo_vars = [v for v in all_vars if v.get("variant_type") == "_combinations"]
+    real_vars = [v for v in all_vars if v.get("variant_type") != "_combinations"]
+    if combo_vars:
+        product.stock = sum(int(v.get("stock", 0) or 0) for v in combo_vars)
+    elif real_vars:
+        product.stock = sum(int(v.get("stock", 0) or 0) for v in real_vars)
     db.commit()
     db.refresh(product)
     return {"product": product_to_dict(product)}
@@ -648,9 +663,13 @@ async def update_product(slug: str, request: Request, db: Session = Depends(get_
                 is_available=v.get("is_available", True),
                 display_order=idx,
             ))
-        real_vars = [v for v in body["variants"] if v.get("variant_type") != "_combinations"]
-        if real_vars:
-            product.stock = sum(v.get("stock", 0) or 0 for v in real_vars)
+        all_vars = body["variants"] or []
+        combo_vars = [v for v in all_vars if v.get("variant_type") == "_combinations"]
+        real_vars = [v for v in all_vars if v.get("variant_type") != "_combinations"]
+        if combo_vars:
+            product.stock = sum(int(v.get("stock", 0) or 0) for v in combo_vars)
+        elif real_vars:
+            product.stock = sum(int(v.get("stock", 0) or 0) for v in real_vars)
 
     db.commit()
     db.refresh(product)
@@ -739,22 +758,36 @@ async def recompute_all_product_stock(request: Request, db: Session = Depends(ge
     if not has_perm(user, "products"):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     from sqlalchemy import func
-    rows = (
+    # Sum stock from _combinations rows (multi-level products) — these hold the real stock.
+    combo_rows = (
+        db.query(ProductVariant.product_id, func.sum(ProductVariant.stock))
+        .filter(ProductVariant.variant_type == "_combinations")
+        .group_by(ProductVariant.product_id)
+        .all()
+    )
+    combo_sums = {pid: int(s or 0) for pid, s in combo_rows}
+    # Fallback: sum non-combination rows (single-level variant products).
+    flat_rows = (
         db.query(ProductVariant.product_id, func.sum(ProductVariant.stock))
         .filter(ProductVariant.variant_type != "_combinations")
         .group_by(ProductVariant.product_id)
         .all()
     )
-    sums = {pid: int(s or 0) for pid, s in rows}
+    flat_sums = {pid: int(s or 0) for pid, s in flat_rows}
     updated = 0
     for prod in db.query(Product).all():
-        if prod.id in sums:
-            new_stock = sums[prod.id]
-            if (prod.stock or 0) != new_stock:
-                prod.stock = new_stock
-                updated += 1
+        if prod.id in combo_sums:
+            new_stock = combo_sums[prod.id]
+        elif prod.id in flat_sums:
+            new_stock = flat_sums[prod.id]
+        else:
+            continue
+        if (prod.stock or 0) != new_stock:
+            prod.stock = new_stock
+            updated += 1
     db.commit()
-    return {"success": True, "updated": updated, "total_with_variants": len(sums)}
+    return {"success": True, "updated": updated,
+            "multi_level": len(combo_sums), "single_level_only": len(flat_sums) - len(combo_sums)}
 
 
 @router.post("/products/sync-zip")
@@ -871,13 +904,21 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
                     # Treat variants as absent when no group actually has options
                     has_real_variants = any((vg.get("options") or []) for vg in variants_data)
                     if has_real_variants:
-                        total_var_stock = 0
+                        non_combo_total = 0
+                        combo_total = 0
+                        has_combo = False
                         for vgroup in variants_data:
                             vtype = vgroup.get("type", "Pilihan")
+                            is_combo = (vtype == "_combinations")
+                            if is_combo:
+                                has_combo = True
                             for opt in vgroup.get("options", []):
                                 v_price = _parse_price(opt.get("price", "0")) or price
-                                v_stock = int(opt.get("stock", 0))
-                                total_var_stock += v_stock
+                                v_stock = int(opt.get("stock", 0) or 0)
+                                if is_combo:
+                                    combo_total += v_stock
+                                else:
+                                    non_combo_total += v_stock
                                 db_w.add(ProductVariant(
                                     id=gen_id(), product_id=product.id,
                                     variant_type=vtype, variant_name=opt.get("name", ""),
@@ -885,10 +926,9 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
                                     is_available=bool(opt.get("available", True)),
                                 ))
                         db_w.flush()
-                        # Compute stock directly from the data we just inserted —
-                        # product.variants relationship is stale after add() and
-                        # sync_product_stock() would see an empty list.
-                        product.stock = total_var_stock
+                        # Multi-level products carry real stock on _combinations rows;
+                        # the Series/Ukuran display rows have stock=0 and must be ignored.
+                        product.stock = combo_total if has_combo else non_combo_total
                     else:
                         product.stock = stock
 
