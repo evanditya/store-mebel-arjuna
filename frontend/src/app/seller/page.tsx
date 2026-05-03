@@ -230,6 +230,19 @@ export default function SellerDashboard() {
   };
   const [shopeeTestResult, setShopeeTestResult] = useState<ShopeeTestResult | null>(null);
 
+  type ExcelVariantMatch = { db_variant_id: string; db_variant_name: string; shopee_variant_name: string; variant_score: number; price_old: number | null; price_new: number | null; stock_old: number; stock_new: number | null };
+  type ExcelMatch = { db_product_id: string; db_product_name: string; shopee_product_id: string; shopee_product_name: string; match_score: number; price_old: number; price_new: number | null; stock_old: number; stock_new: number | null; variant_matches: ExcelVariantMatch[] };
+  type ExcelPreview = { matched: ExcelMatch[]; unmatched: { db_product_id: string; db_product_name: string }[]; summary: { total_db: number; matched_high: number; matched_ok: number; unmatched: number } };
+
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
+  const [excelPreviewing, setExcelPreviewing] = useState(false);
+  const [excelPreviewError, setExcelPreviewError] = useState("");
+  const [excelApplying, setExcelApplying] = useState(false);
+  const [excelApplyResult, setExcelApplyResult] = useState<{ updated_products: number; updated_variants: number } | null>(null);
+  const [excelSelected, setExcelSelected] = useState<Set<string>>(new Set());
+  const [excelFilter, setExcelFilter] = useState<"all" | "high" | "ok">("all");
+
   const [banners, setBanners] = useState<Banner[]>([]);
   const [showCropper, setShowCropper] = useState(false);
   const [bannerForms, setBannerForms] = useState<Record<number, { title: string; link: string }>>({});
@@ -684,6 +697,9 @@ export default function SellerDashboard() {
           )}
           {(user?.role === "seller" || (user?.permissions || []).includes("settings")) && (
             <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
+          )}
+          {user?.role === "seller" && (
+            <button onClick={() => setTab("import")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "import" ? "bg-emerald-700 text-white" : "bg-white border text-emerald-700"}`} data-testid="tab-import">Import Excel</button>
           )}
           {user?.role === "seller" && (
             <button onClick={() => setTab("admins")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "admins" ? "bg-indigo-700 text-white" : "bg-white border text-indigo-700"}`} data-testid="tab-admins">Kelola Admin</button>
@@ -1971,6 +1987,168 @@ export default function SellerDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {tab === "import" && (
+          <div className="space-y-5">
+            <div className="bg-white rounded-lg border p-6">
+              <h2 className="font-bold text-lg mb-1">Import Excel Shopee</h2>
+              <p className="text-sm text-gray-500 mb-4">Upload file Excel ekspor Shopee untuk memperbarui harga dan stok produk secara massal. Format: file <code className="bg-gray-100 px-1 rounded">.xlsx</code> dari menu Perbarui Produk Shopee Seller Center.</p>
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Pilih File Excel</label>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={(e) => {
+                      setExcelFile(e.target.files?.[0] || null);
+                      setExcelPreview(null);
+                      setExcelApplyResult(null);
+                      setExcelPreviewError("");
+                      setExcelSelected(new Set());
+                    }}
+                    className="block text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-900 file:text-white hover:file:bg-gray-700 cursor-pointer"
+                  />
+                </div>
+                <button
+                  disabled={!excelFile || excelPreviewing}
+                  onClick={async () => {
+                    if (!excelFile) return;
+                    setExcelPreviewing(true);
+                    setExcelPreviewError("");
+                    setExcelPreview(null);
+                    setExcelSelected(new Set());
+                    setExcelApplyResult(null);
+                    const fd = new FormData();
+                    fd.append("file", excelFile);
+                    try {
+                      const res = await fetch("/api/excel-import/preview", { method: "POST", body: fd });
+                      const data = await res.json();
+                      if (data.error) { setExcelPreviewError(data.error); }
+                      else {
+                        setExcelPreview(data);
+                        setExcelSelected(new Set(data.matched.filter((m: ExcelMatch) => m.match_score >= 0.7).map((m: ExcelMatch) => m.db_product_id)));
+                      }
+                    } catch { setExcelPreviewError("Gagal menghubungi server."); }
+                    finally { setExcelPreviewing(false); }
+                  }}
+                  className="px-5 py-2 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition disabled:opacity-40"
+                >
+                  {excelPreviewing ? "Memproses..." : "Preview Perubahan"}
+                </button>
+              </div>
+              {excelPreviewError && <p className="mt-3 text-sm text-red-600">{excelPreviewError}</p>}
+            </div>
+
+            {excelPreview && (
+              <>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-white rounded-lg border p-4 text-center"><p className="text-xs text-gray-500 mb-1">Total Produk</p><p className="text-2xl font-bold">{excelPreview.summary.total_db}</p></div>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center"><p className="text-xs text-emerald-700 mb-1">Cocok Tinggi ≥ 0.7</p><p className="text-2xl font-bold text-emerald-700">{excelPreview.summary.matched_high}</p></div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center"><p className="text-xs text-yellow-700 mb-1">Perlu Cek 0.5–0.7</p><p className="text-2xl font-bold text-yellow-700">{excelPreview.summary.matched_ok}</p></div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center"><p className="text-xs text-red-600 mb-1">Tidak Cocok</p><p className="text-2xl font-bold text-red-600">{excelPreview.summary.unmatched}</p></div>
+                </div>
+
+                <div className="bg-white rounded-lg border p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div className="flex gap-2">
+                      {(["all", "high", "ok"] as const).map((f) => (
+                        <button key={f} onClick={() => setExcelFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${excelFilter === f ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}>
+                          {f === "all" ? "Semua" : f === "high" ? "Cocok Tinggi" : "Perlu Cek"}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => {
+                        const visible = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7));
+                        setExcelSelected(prev => { const s = new Set(prev); visible.forEach(m => s.add(m.db_product_id)); return s; });
+                      }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Pilih Semua</button>
+                      <button onClick={() => {
+                        const visible = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7));
+                        setExcelSelected(prev => { const s = new Set(prev); visible.forEach(m => s.delete(m.db_product_id)); return s; });
+                      }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Batal Pilih</button>
+                      <button
+                        disabled={excelSelected.size === 0 || excelApplying}
+                        onClick={async () => {
+                          setExcelApplying(true);
+                          setExcelApplyResult(null);
+                          const updates = excelPreview.matched.filter(m => excelSelected.has(m.db_product_id));
+                          try {
+                            const res = await fetch("/api/excel-import/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) });
+                            const data = await res.json();
+                            if (data.success) { setExcelApplyResult(data); setExcelPreview(null); setExcelFile(null); }
+                            else alert(data.error || "Gagal menerapkan.");
+                          } catch { alert("Terjadi kesalahan."); }
+                          finally { setExcelApplying(false); }
+                        }}
+                        className="px-5 py-1.5 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition disabled:opacity-40"
+                      >
+                        {excelApplying ? "Menerapkan..." : `Terapkan ${excelSelected.size} Produk`}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-gray-500">
+                          <th className="pb-2 pr-3 w-8"></th>
+                          <th className="pb-2 pr-3">Produk di Toko</th>
+                          <th className="pb-2 pr-3">Nama Shopee</th>
+                          <th className="pb-2 pr-3 text-center">Skor</th>
+                          <th className="pb-2 pr-3 text-right">Harga Lama</th>
+                          <th className="pb-2 pr-3 text-right">Harga Baru</th>
+                          <th className="pb-2 pr-3 text-right">Stok Lama</th>
+                          <th className="pb-2 text-right">Stok Baru</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {excelPreview.matched
+                          .filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7))
+                          .map((m) => (
+                            <tr key={m.db_product_id} className={`border-b last:border-0 ${excelSelected.has(m.db_product_id) ? "bg-emerald-50" : ""}`}>
+                              <td className="py-2 pr-3">
+                                <input type="checkbox" checked={excelSelected.has(m.db_product_id)} onChange={(e) => setExcelSelected(prev => { const s = new Set(prev); e.target.checked ? s.add(m.db_product_id) : s.delete(m.db_product_id); return s; })} className="w-4 h-4 rounded" />
+                              </td>
+                              <td className="py-2 pr-3 max-w-[200px]">
+                                <p className="font-medium truncate" title={m.db_product_name}>{m.db_product_name}</p>
+                                {m.variant_matches.length > 0 && <p className="text-xs text-gray-400">{m.variant_matches.length} varian</p>}
+                              </td>
+                              <td className="py-2 pr-3 max-w-[200px]">
+                                <p className="text-gray-500 text-xs truncate" title={m.shopee_product_name}>{m.shopee_product_name}</p>
+                              </td>
+                              <td className="py-2 pr-3 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.match_score >= 0.7 ? "bg-emerald-100 text-emerald-700" : "bg-yellow-100 text-yellow-700"}`}>{m.match_score}</span>
+                              </td>
+                              <td className="py-2 pr-3 text-right text-gray-500">{m.price_old?.toLocaleString("id-ID")}</td>
+                              <td className="py-2 pr-3 text-right font-medium">
+                                {m.price_new !== null && m.price_new !== undefined
+                                  ? <span className={m.price_new !== m.price_old ? "text-blue-600" : ""}>{m.price_new.toLocaleString("id-ID")}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="py-2 pr-3 text-right text-gray-500">{m.stock_old}</td>
+                              <td className="py-2 text-right font-medium">
+                                {m.stock_new !== null && m.stock_new !== undefined
+                                  ? <span className={m.stock_new !== m.stock_old ? "text-blue-600" : ""}>{m.stock_new}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {excelApplyResult && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-5 text-emerald-800">
+                <p className="font-bold mb-1">Berhasil diperbarui!</p>
+                <p className="text-sm">{excelApplyResult.updated_products} produk dan {excelApplyResult.updated_variants} varian telah diperbarui harga &amp; stoknya.</p>
+                <button onClick={() => setExcelApplyResult(null)} className="mt-3 text-sm underline">Upload file lagi</button>
+              </div>
+            )}
           </div>
         )}
       </div>

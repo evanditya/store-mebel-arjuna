@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import engine, Base
-from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners, admins, shopee_sync as shopee_sync_routes
+from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners, admins, shopee_sync as shopee_sync_routes, excel_import as excel_import_routes
 from app import shopee_sync as shopee_sync_svc
 import os
 
@@ -83,6 +83,7 @@ app.include_router(branding.router)
 app.include_router(banners.router)
 app.include_router(admins.router)
 app.include_router(shopee_sync_routes.router)
+app.include_router(excel_import_routes.router)
 
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
