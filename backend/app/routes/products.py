@@ -677,6 +677,54 @@ async def delete_product(slug: str, request: Request, db: Session = Depends(get_
     return {"success": True}
 
 
+@router.post("/products/repair-stock-json")
+async def repair_stock_from_json(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """One-time repair: accept products.json and set product.stock from the
+    JSON 'stock' field for any product without real variants. Matches by
+    shopee_url id (preferred) then by exact name."""
+    user = get_current_user(request, db)
+    if not has_perm(user, "products"):
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+    raw = await file.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return JSONResponse({"error": "JSON tidak valid"}, status_code=400)
+    products_list = data.get("products", []) if isinstance(data, dict) else (data or [])
+    updated = 0
+    not_found = 0
+    skipped_has_variants = 0
+    for p in products_list:
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        product_url = p.get("product_url", "") or ""
+        m = re.search(r"(i\.\d+\.\d+)", product_url)
+        shopee_id = m.group(1) if m else ""
+        prod = None
+        if shopee_id:
+            prod = db.query(Product).filter(Product.shopee_url == shopee_id).first()
+        if prod is None:
+            prod = db.query(Product).filter(Product.name == name).first()
+        if prod is None:
+            not_found += 1
+            continue
+        # Only fix products without real variants
+        has_real = db.query(ProductVariant).filter(ProductVariant.product_id == prod.id).first() is not None
+        if has_real:
+            skipped_has_variants += 1
+            continue
+        try:
+            stock_val = int(p.get("stock", 0) or 0)
+        except Exception:
+            stock_val = 0
+        if (prod.stock or 0) != stock_val:
+            prod.stock = stock_val
+            updated += 1
+    db.commit()
+    return {"success": True, "updated": updated, "not_found": not_found, "skipped_has_variants": skipped_has_variants}
+
+
 @router.post("/products/recompute-stock")
 async def recompute_all_product_stock(request: Request, db: Session = Depends(get_db)):
     """Recompute product.stock from sum of variant.stock for every product.
@@ -814,7 +862,9 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
                     db_w.flush()
 
                     variants_data = p.get("variants", []) or []
-                    if variants_data:
+                    # Treat variants as absent when no group actually has options
+                    has_real_variants = any((vg.get("options") or []) for vg in variants_data)
+                    if has_real_variants:
                         total_var_stock = 0
                         for vgroup in variants_data:
                             vtype = vgroup.get("type", "Pilihan")
