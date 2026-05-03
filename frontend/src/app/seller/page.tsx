@@ -164,7 +164,7 @@ export default function SellerDashboard() {
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings" | "admins">("products");
+  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings" | "admins" | "import">("products");
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string; permissions: string[] } | null>(null);
   const [adminUsers, setAdminUsers] = useState<{ id: string; name: string; email: string; permissions: string[]; created_at: string }[]>([]);
