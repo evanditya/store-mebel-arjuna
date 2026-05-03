@@ -197,9 +197,12 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
     return (type: string, optName: string) => {
       const typeIndex = variantTypes.indexOf(type);
       if (typeIndex === -1) return true;
+      // Use `includes` instead of strict position — combo names may store parts
+      // in a different order than variantTypes (e.g. combos = "Set / size" but
+      // variantTypes = ["size","Set"]). Variant names are unique across types.
       const relevantCombos = combinations.filter((c) => {
         const parts = c.variant_name.split(" / ").map((s: string) => s.trim());
-        return parts[typeIndex] === optName;
+        return parts.includes(optName);
       });
       if (relevantCombos.length === 0) return true;
       const otherSelected = variantTypes.filter((t) => t !== type).map((t) => selectedVariants[t]).filter(Boolean);
@@ -317,10 +320,9 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
                       // because the Series/Ukuran display rows always have stock=0.
                       let effectiveStock = v.stock ?? 0;
                       if (combinations.length > 0 && variantTypes.length > 1) {
-                        const typeIndex = variantTypes.indexOf(type);
                         const matching = combinations.filter((c) => {
                           const parts = c.variant_name.split(" / ").map((s: string) => s.trim());
-                          return parts[typeIndex] === v.variant_name && c.is_available;
+                          return parts.includes(v.variant_name) && c.is_available;
                         });
                         effectiveStock = matching.reduce((s, c) => s + (c.stock ?? 0), 0);
                       }
