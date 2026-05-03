@@ -313,7 +313,18 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
                       const isSelected = selectedVariants[type] === v.variant_name;
                       const comboAvailable = isOptionAvailableInCombos(type, v.variant_name);
                       const effectiveAvailable = v.is_available && comboAvailable;
-                      const stockLabel = isNewCombinationFormat || !effectiveAvailable ? null : v.stock === 0 ? "Habis" : v.stock <= 5 ? `Sisa ${v.stock}` : null;
+                      // For multi-level products, derive per-option stock from matching combinations
+                      // because the Series/Ukuran display rows always have stock=0.
+                      let effectiveStock = v.stock ?? 0;
+                      if (combinations.length > 0 && variantTypes.length > 1) {
+                        const typeIndex = variantTypes.indexOf(type);
+                        const matching = combinations.filter((c) => {
+                          const parts = c.variant_name.split(" / ").map((s: string) => s.trim());
+                          return parts[typeIndex] === v.variant_name && c.is_available;
+                        });
+                        effectiveStock = matching.reduce((s, c) => s + (c.stock ?? 0), 0);
+                      }
+                      const stockLabel = isNewCombinationFormat || !effectiveAvailable ? null : effectiveStock === 0 ? "Habis" : effectiveStock <= 5 ? `Sisa ${effectiveStock}` : null;
                       return (
                         <button
                           key={v.variant_name}
