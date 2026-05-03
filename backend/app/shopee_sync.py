@@ -340,7 +340,7 @@ def _fetch_and_process(only_unseen: bool = True, mark_seen: bool = True) -> dict
             client.login(cfg["user"], cfg["password"])
             client.select_folder(cfg["folder"])
             criteria = ["UNSEEN"] if only_unseen else ["ALL"]
-            criteria += ["SUBJECT", "Telah Diterima Pembeli"]
+            criteria += ["SUBJECT", "Siap Dikirim"]
             uids = client.search(criteria)
             if not uids:
                 return summary
