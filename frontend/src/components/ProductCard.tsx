@@ -54,12 +54,17 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
   const hasDiscount = maxDiscPct > 0;
   const origRange = origMin != null && origMax != null;
 
-  const realVariants = (product.variants || []).filter((v) => v.variant_type !== "_combinations");
-  const availableVariants = realVariants.filter((v) => v.is_available !== false);
-  const allVariantsUnavailable = realVariants.length > 0 && availableVariants.length === 0;
+  const allVars = product.variants || [];
+  const comboVariants = allVars.filter((v) => v.variant_type === "_combinations");
+  const realVariants = allVars.filter((v) => v.variant_type !== "_combinations");
+  // Multi-level products: real stock lives in `_combinations` rows. Series/Ukuran
+  // rows are display-only labels with stock=0, so summing them gives a false 0.
+  const stockSourceVariants = comboVariants.length > 0 ? comboVariants : realVariants;
+  const availableVariants = stockSourceVariants.filter((v) => v.is_available !== false);
+  const allVariantsUnavailable = stockSourceVariants.length > 0 && availableVariants.length === 0;
   const totalStock = availableVariants.length > 0
     ? availableVariants.reduce((s, v) => s + (v.stock ?? 0), 0)
-    : realVariants.length === 0 ? (product.stock ?? null) : 0;
+    : stockSourceVariants.length === 0 ? (product.stock ?? null) : 0;
   const isOutOfStock = allVariantsUnavailable || (totalStock != null && totalStock === 0);
 
   return (
