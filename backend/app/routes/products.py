@@ -691,9 +691,15 @@ async def repair_stock_from_json(request: Request, file: UploadFile = File(...),
     except Exception:
         return JSONResponse({"error": "JSON tidak valid"}, status_code=400)
     products_list = data.get("products", []) if isinstance(data, dict) else (data or [])
+    # Bulk-load: avoid N×3 round-trips to the DB
+    all_prods = db.query(Product.id, Product.name, Product.shopee_url, Product.stock).all()
+    by_shopee = {p.shopee_url: p for p in all_prods if p.shopee_url}
+    by_name = {p.name: p for p in all_prods}
+    products_with_variants = {pid for (pid,) in db.query(ProductVariant.product_id).distinct().all()}
     updated = 0
     not_found = 0
     skipped_has_variants = 0
+    pending: dict = {}  # product_id -> new_stock
     for p in products_list:
         name = (p.get("name") or "").strip()
         if not name:
@@ -701,27 +707,27 @@ async def repair_stock_from_json(request: Request, file: UploadFile = File(...),
         product_url = p.get("product_url", "") or ""
         m = re.search(r"(i\.\d+\.\d+)", product_url)
         shopee_id = m.group(1) if m else ""
-        prod = None
-        if shopee_id:
-            prod = db.query(Product).filter(Product.shopee_url == shopee_id).first()
-        if prod is None:
-            prod = db.query(Product).filter(Product.name == name).first()
-        if prod is None:
+        row = by_shopee.get(shopee_id) if shopee_id else None
+        if row is None:
+            row = by_name.get(name)
+        if row is None:
             not_found += 1
             continue
-        # Only fix products without real variants
-        has_real = db.query(ProductVariant).filter(ProductVariant.product_id == prod.id).first() is not None
-        if has_real:
+        if row.id in products_with_variants:
             skipped_has_variants += 1
             continue
         try:
             stock_val = int(p.get("stock", 0) or 0)
         except Exception:
             stock_val = 0
-        if (prod.stock or 0) != stock_val:
-            prod.stock = stock_val
+        if (row.stock or 0) != stock_val:
+            pending[row.id] = stock_val
+    # Apply updates in a single bulk operation
+    if pending:
+        for pid, new_stock in pending.items():
+            db.query(Product).filter(Product.id == pid).update({"stock": new_stock}, synchronize_session=False)
             updated += 1
-    db.commit()
+        db.commit()
     return {"success": True, "updated": updated, "not_found": not_found, "skipped_has_variants": skipped_has_variants}
 
 
