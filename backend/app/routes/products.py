@@ -677,6 +677,32 @@ async def delete_product(slug: str, request: Request, db: Session = Depends(get_
     return {"success": True}
 
 
+@router.post("/products/recompute-stock")
+async def recompute_all_product_stock(request: Request, db: Session = Depends(get_db)):
+    """Recompute product.stock from sum of variant.stock for every product.
+    Used to repair data after the sync-zip variant-stock bug."""
+    user = get_current_user(request, db)
+    if not has_perm(user, "products"):
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+    from sqlalchemy import func
+    rows = (
+        db.query(ProductVariant.product_id, func.sum(ProductVariant.stock))
+        .filter(ProductVariant.variant_type != "_combinations")
+        .group_by(ProductVariant.product_id)
+        .all()
+    )
+    sums = {pid: int(s or 0) for pid, s in rows}
+    updated = 0
+    for prod in db.query(Product).all():
+        if prod.id in sums:
+            new_stock = sums[prod.id]
+            if (prod.stock or 0) != new_stock:
+                prod.stock = new_stock
+                updated += 1
+    db.commit()
+    return {"success": True, "updated": updated, "total_with_variants": len(sums)}
+
+
 @router.post("/products/sync-zip")
 async def sync_products_zip(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -789,18 +815,24 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
 
                     variants_data = p.get("variants", []) or []
                     if variants_data:
+                        total_var_stock = 0
                         for vgroup in variants_data:
                             vtype = vgroup.get("type", "Pilihan")
                             for opt in vgroup.get("options", []):
                                 v_price = _parse_price(opt.get("price", "0")) or price
+                                v_stock = int(opt.get("stock", 0))
+                                total_var_stock += v_stock
                                 db_w.add(ProductVariant(
                                     id=gen_id(), product_id=product.id,
                                     variant_type=vtype, variant_name=opt.get("name", ""),
-                                    price=v_price, stock=int(opt.get("stock", 0)),
+                                    price=v_price, stock=v_stock,
                                     is_available=bool(opt.get("available", True)),
                                 ))
                         db_w.flush()
-                        sync_product_stock(product)
+                        # Compute stock directly from the data we just inserted —
+                        # product.variants relationship is stale after add() and
+                        # sync_product_stock() would see an empty list.
+                        product.stock = total_var_stock
                     else:
                         product.stock = stock
 
