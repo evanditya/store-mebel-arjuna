@@ -182,6 +182,19 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
     return {"order": order_to_dict(order)}
 
 
+@router.delete("/orders/{order_id}")
+async def delete_order(order_id: str, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not has_perm(user, "orders"):
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
+    db.delete(order)
+    db.commit()
+    return {"success": True}
+
+
 @router.put("/orders")
 async def update_order_status(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
