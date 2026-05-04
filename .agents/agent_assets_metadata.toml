@@ -6,3 +6,9 @@ id = "3M91SFzFTatX8R0bm0Nlh"
 uri = "file://marketplace_template.zip"
 type = "unspecified"
 title = "Complete Marketplace Template (42 files)"
+
+[[outputs]]
+id = "8TNWHjkjJyCFWPBTVhtYq"
+uri = "file://mebel-store-template.zip"
+type = "unspecified"
+title = "Marketplace Template (from Shopee Scraper)"
