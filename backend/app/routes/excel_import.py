@@ -299,6 +299,8 @@ async def preview_import(
 
 @router.post("/apply")
 async def apply_import(request: Request, db: Session = Depends(get_db)):
+    import json as _json
+
     user = get_current_user(request, db)
     if not user or user.role != "seller":
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -306,86 +308,85 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     updates = body.get("updates", [])
 
-    from app.models import Product, ProductVariant
-
-    # Collect all IDs upfront for bulk fetch (avoids N+M individual queries)
-    product_ids = [u["db_product_id"] for u in updates if u.get("db_product_id")]
-    variant_ids = [
-        vu["db_variant_id"]
-        for u in updates
-        for vu in u.get("variant_matches", [])
-        if vu.get("db_variant_id")
-    ]
-
-    # Two bulk queries instead of one per row
-    prod_map = {
-        p.id: p
-        for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
-    }
-    var_map = {
-        v.id: v
-        for v in db.query(ProductVariant).filter(ProductVariant.id.in_(variant_ids)).all()
-    } if variant_ids else {}
-
-    updated_products = 0
-    updated_variants = 0
+    # Build compact payload lists — one entry per product, one per variant
+    prod_rows = []
+    var_rows = []
 
     for u in updates:
-        prod = prod_map.get(u.get("db_product_id"))
-        if not prod:
+        pid = u.get("db_product_id")
+        if not pid:
             continue
-
-        new_price = u.get("price_new")
-        new_stock = u.get("stock_new")
         variant_updates = u.get("variant_matches", [])
-
-        if new_price is not None:
-            prod.price = new_price
-        if new_stock is not None:
-            prod.stock = new_stock
-
-        if u.get("berat_new") is not None:
-            prod.weight = int(u["berat_new"])
-        if u.get("panjang_new") is not None:
-            prod.length = int(u["panjang_new"])
-        if u.get("lebar_new") is not None:
-            prod.width = int(u["lebar_new"])
-        if u.get("tinggi_new") is not None:
-            prod.height = int(u["tinggi_new"])
-        if u.get("kategori_new"):
-            prod.category = u["kategori_new"]
-        if u.get("deskripsi_new"):
-            prod.description = u["deskripsi_new"]
-        if u.get("video_new"):
-            prod.video_url = u["video_new"]
-
-        if not variant_updates:
-            diskon = u.get("diskon_new")
-            if diskon is not None:
-                prod.original_price = float(diskon) if diskon else None
-            tersedia = u.get("tersedia_new")
-            if tersedia:
-                prod.is_available = tersedia.lower() not in ("tidak", "no", "false", "0")
-
-        updated_products += 1
-
+        tersedia = u.get("tersedia_new") if not variant_updates else None
+        prod_rows.append({
+            "id": pid,
+            "price": u.get("price_new"),
+            "stock": u.get("stock_new"),
+            "diskon": u.get("diskon_new") if not variant_updates else "__skip__",
+            "tersedia": tersedia,
+            "berat": u.get("berat_new"),
+            "panjang": u.get("panjang_new"),
+            "lebar": u.get("lebar_new"),
+            "tinggi": u.get("tinggi_new"),
+            "kategori": u.get("kategori_new") or None,
+            "deskripsi": u.get("deskripsi_new") or None,
+            "video": u.get("video_new") or None,
+        })
         for vu in variant_updates:
-            dbv = var_map.get(vu.get("db_variant_id"))
-            if not dbv:
+            vid = vu.get("db_variant_id")
+            if not vid:
                 continue
-            if vu.get("price_new") is not None:
-                dbv.price = vu["price_new"]
-            if vu.get("stock_new") is not None:
-                dbv.stock = vu["stock_new"]
-            if vu.get("diskon_new") is not None:
-                dbv.original_price = float(vu["diskon_new"]) if vu["diskon_new"] else None
-            if vu.get("tersedia_new"):
-                dbv.is_available = vu["tersedia_new"].lower() not in ("tidak", "no", "false", "0")
-            updated_variants += 1
+            var_rows.append({
+                "id": vid,
+                "price": vu.get("price_new"),
+                "stock": vu.get("stock_new"),
+                "diskon": vu.get("diskon_new"),
+                "tersedia": vu.get("tersedia_new"),
+            })
+
+    from sqlalchemy import text
+
+    # ── ONE SQL statement for all products ──────────────────────────────────
+    if prod_rows:
+        db.execute(text("""
+            UPDATE products AS p SET
+                price           = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float    ELSE p.price           END,
+                stock           = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int      ELSE p.stock           END,
+                original_price  = CASE WHEN j->>'diskon' = '__skip__' THEN p.original_price
+                                       WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
+                                       ELSE p.original_price END,
+                is_available    = CASE WHEN (j->>'tersedia') IS NOT NULL
+                                       THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
+                                       ELSE p.is_available   END,
+                weight          = CASE WHEN (j->>'berat')    IS NOT NULL THEN (j->>'berat')::int      ELSE p.weight          END,
+                length          = CASE WHEN (j->>'panjang')  IS NOT NULL THEN (j->>'panjang')::int    ELSE p.length          END,
+                width           = CASE WHEN (j->>'lebar')    IS NOT NULL THEN (j->>'lebar')::int      ELSE p.width           END,
+                height          = CASE WHEN (j->>'tinggi')   IS NOT NULL THEN (j->>'tinggi')::int     ELSE p.height          END,
+                category        = COALESCE(j->>'kategori',  p.category),
+                description     = COALESCE(j->>'deskripsi', p.description),
+                video_url       = COALESCE(j->>'video',     p.video_url)
+            FROM json_array_elements(CAST(:data AS json)) AS j
+            WHERE p.id = j->>'id'
+        """), {"data": _json.dumps(prod_rows)})
+
+    # ── ONE SQL statement for all variants ──────────────────────────────────
+    if var_rows:
+        db.execute(text("""
+            UPDATE product_variants AS v SET
+                price          = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float  ELSE v.price          END,
+                stock          = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int    ELSE v.stock          END,
+                original_price = CASE WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
+                                      ELSE v.original_price END,
+                is_available   = CASE WHEN (j->>'tersedia') IS NOT NULL
+                                      THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
+                                      ELSE v.is_available   END
+            FROM json_array_elements(CAST(:data AS json)) AS j
+            WHERE v.id = j->>'id'
+        """), {"data": _json.dumps(var_rows)})
 
     db.commit()
     return {
         "success": True,
-        "updated_products": updated_products,
-        "updated_variants": updated_variants,
+        "updated_products": len(prod_rows),
+        "updated_variants": len(var_rows),
     }
