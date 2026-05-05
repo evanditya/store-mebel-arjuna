@@ -160,6 +160,13 @@ export default function EditProductPage() {
 
   const hasVariants = combinations.length > 0;
   const totalVariantStock = combinations.reduce((sum, c) => sum + (c.stock || 0), 0);
+  const minComboPrice = hasVariants
+    ? combinations.filter(c => c.price != null).reduce((min, c) => (c.price! < min ? c.price! : min), Infinity)
+    : null;
+  const minComboDiscount = hasVariants
+    ? combinations.filter(c => c.original_price != null).reduce((min, c) => (c.original_price! < min ? c.original_price! : min), Infinity)
+    : null;
+  const hasComboDiscount = hasVariants && combinations.some(c => c.original_price != null);
 
   const applyGroupChange = (newGroups: VariantGroup[]) => {
     setVariantGroups(newGroups);
@@ -386,38 +393,54 @@ export default function EditProductPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Harga Asli (Rp)</label>
-                <input type="text" inputMode="numeric" value={fmtNum(price)} onChange={e => { setPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, price: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.price ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-price" />
+                {hasVariants ? (
+                  <>
+                    <input type="text" value={minComboPrice !== null && minComboPrice !== Infinity ? fmtNum(minComboPrice) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-price" />
+                    <p className="text-xs text-gray-400 mt-1">Mengikuti harga varian</p>
+                  </>
+                ) : (
+                  <input type="text" inputMode="numeric" value={fmtNum(price)} onChange={e => { setPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, price: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.price ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-price" />
+                )}
               </div>
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                   Harga Diskon (Rp) <span className="font-normal text-gray-400">(Opsional)</span>
-                  <div className="relative">
-                    <button type="button" onClick={() => setShowProductDiscountTip(v => !v)} className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none flex-shrink-0">!</button>
-                    {showProductDiscountTip && (
-                      <div className="absolute left-0 top-5 z-20 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600 font-normal">
-                        Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
-                      </div>
-                    )}
-                  </div>
-                </label>
-                {(() => {
-                  const discountInvalid = !!originalPrice && !!price && Number(originalPrice) >= Number(price);
-                  return (
-                    <>
-                      <input
-                        type="text" inputMode="numeric"
-                        value={fmtNum(originalPrice)}
-                        onChange={e => { setOriginalPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, originalPrice: false })); }}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${discountInvalid || fieldErrors.originalPrice ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
-                        placeholder="0"
-                        data-testid="input-product-original-price"
-                      />
-                      {discountInvalid && (
-                        <p className="text-xs text-red-500 mt-1">⚠ Harga diskon harus lebih kecil dari harga asli</p>
+                  {!hasVariants && (
+                    <div className="relative">
+                      <button type="button" onClick={() => setShowProductDiscountTip(v => !v)} className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none flex-shrink-0">!</button>
+                      {showProductDiscountTip && (
+                        <div className="absolute left-0 top-5 z-20 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600 font-normal">
+                          Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
+                        </div>
                       )}
-                    </>
-                  );
-                })()}
+                    </div>
+                  )}
+                </label>
+                {hasVariants ? (
+                  <>
+                    <input type="text" value={hasComboDiscount && minComboDiscount !== null && minComboDiscount !== Infinity ? fmtNum(minComboDiscount) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-original-price" />
+                    <p className="text-xs text-gray-400 mt-1">Mengikuti harga varian</p>
+                  </>
+                ) : (
+                  (() => {
+                    const discountInvalid = !!originalPrice && !!price && Number(originalPrice) >= Number(price);
+                    return (
+                      <>
+                        <input
+                          type="text" inputMode="numeric"
+                          value={fmtNum(originalPrice)}
+                          onChange={e => { setOriginalPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, originalPrice: false })); }}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${discountInvalid || fieldErrors.originalPrice ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
+                          placeholder="0"
+                          data-testid="input-product-original-price"
+                        />
+                        {discountInvalid && (
+                          <p className="text-xs text-red-500 mt-1">⚠ Harga diskon harus lebih kecil dari harga asli</p>
+                        )}
+                      </>
+                    );
+                  })()
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
