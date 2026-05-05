@@ -770,7 +770,29 @@ export default function SellerDashboard() {
                         disabled={excelSelected.size === 0 || excelApplying}
                         onClick={async () => {
                           setExcelApplying(true);
-                          const updates = excelPreview.matched.filter(m => excelSelected.has(m.db_product_id));
+                          const updates = excelPreview.matched
+                            .filter(m => excelSelected.has(m.db_product_id))
+                            .map(m => ({
+                              db_product_id: m.db_product_id,
+                              price_new: m.price_new,
+                              stock_new: m.stock_new,
+                              diskon_new: m.diskon_new ?? null,
+                              tersedia_new: m.tersedia_new ?? null,
+                              berat_new: m.berat_new ?? null,
+                              panjang_new: m.panjang_new ?? null,
+                              lebar_new: m.lebar_new ?? null,
+                              tinggi_new: m.tinggi_new ?? null,
+                              kategori_new: m.kategori_new ?? null,
+                              deskripsi_new: m.deskripsi_new ?? null,
+                              video_new: m.video_new ?? null,
+                              variant_matches: m.variant_matches.map(v => ({
+                                db_variant_id: v.db_variant_id,
+                                price_new: v.price_new,
+                                stock_new: v.stock_new,
+                                diskon_new: v.diskon_new ?? null,
+                                tersedia_new: v.tersedia_new ?? null,
+                              })),
+                            }));
                           try {
                             const res = await fetch("/api/excel-import/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) });
                             const data = await res.json();
