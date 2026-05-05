@@ -61,12 +61,15 @@ function cartesianProduct(groups: VariantGroup[]): string[][] {
 }
 
 function rebuildCombinations(groups: VariantGroup[], existing: CombinationRow[]): CombinationRow[] {
-  const product = cartesianProduct(groups);
-  return product.map(keys => {
-    const key = keys.join("\0");
-    const found = existing.find(r => r.comboKeys.join("\0") === key);
-    return found ?? { comboKeys: keys, price: null, original_price: null, stock: null, is_available: true };
-  });
+  const validKeys = new Set(cartesianProduct(groups).map(keys => keys.join("\0")));
+  // 1. Keep existing combos that are still valid — preserves original order
+  const kept = existing.filter(r => validKeys.has(r.comboKeys.join("\0")));
+  const keptKeys = new Set(kept.map(r => r.comboKeys.join("\0")));
+  // 2. Append brand-new combos (newly added values) at the end
+  const added = cartesianProduct(groups)
+    .filter(keys => !keptKeys.has(keys.join("\0")))
+    .map(keys => ({ comboKeys: keys, price: null, original_price: null, stock: null, is_available: true }));
+  return [...kept, ...added];
 }
 
 function parseVariantsToState(apiVariants: ApiVariant[]): { groups: VariantGroup[]; combos: CombinationRow[] } {
