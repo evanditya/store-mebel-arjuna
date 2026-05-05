@@ -230,7 +230,7 @@ export default function SellerDashboard() {
   const [shopeeTestResult, setShopeeTestResult] = useState<ShopeeTestResult | null>(null);
 
   type ExcelVariantMatch = { db_variant_id: string; db_variant_name: string; shopee_variant_name: string; variant_score: number; price_old: number | null; price_new: number | null; stock_old: number; stock_new: number | null; diskon_new?: number | null; tersedia_new?: string | null };
-  type ExcelMatch = { db_product_id: string; db_product_name: string; shopee_product_id: string; shopee_product_name: string; match_score: number; price_old: number; price_new: number | null; stock_old: number; stock_new: number | null; variant_matches: ExcelVariantMatch[]; diskon_new?: number | null; tersedia_new?: string | null; berat_new?: number | null; panjang_new?: number | null; lebar_new?: number | null; tinggi_new?: number | null; kategori_new?: string | null; deskripsi_new?: string | null; video_new?: string | null };
+  type ExcelMatch = { db_product_id: string; db_product_name: string; shopee_product_id: string; shopee_product_name: string; match_score: number; price_old: number; price_new: number | null; stock_old: number; stock_new: number | null; variant_matches: ExcelVariantMatch[]; has_changes: boolean; diskon_new?: number | null; tersedia_new?: string | null; berat_new?: number | null; panjang_new?: number | null; lebar_new?: number | null; tinggi_new?: number | null; kategori_new?: string | null; deskripsi_new?: string | null; video_new?: string | null };
   type ExcelPreview = { matched: ExcelMatch[]; unmatched: { db_product_id: string; db_product_name: string }[]; summary: { total_db: number; matched_high: number; matched_ok: number; unmatched: number } };
 
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -240,7 +240,7 @@ export default function SellerDashboard() {
   const [excelApplying, setExcelApplying] = useState(false);
   const [excelApplyResult, setExcelApplyResult] = useState<{ updated_products: number; updated_variants: number } | null>(null);
   const [excelSelected, setExcelSelected] = useState<Set<string>>(new Set());
-  const [excelFilter, setExcelFilter] = useState<"all" | "high" | "ok">("all");
+  const [excelFilter, setExcelFilter] = useState<"all" | "changed" | "high" | "ok">("changed");
 
   const [banners, setBanners] = useState<Banner[]>([]);
   const [showCropper, setShowCropper] = useState(false);
@@ -624,7 +624,7 @@ export default function SellerDashboard() {
       if (data.error) { setExcelPreviewError(data.error); }
       else {
         setExcelPreview(data);
-        setExcelSelected(new Set(data.matched.filter((m: ExcelMatch) => m.match_score >= 0.7).map((m: ExcelMatch) => m.db_product_id)));
+        setExcelSelected(new Set(data.matched.filter((m: ExcelMatch) => m.match_score >= 0.7 && m.has_changes).map((m: ExcelMatch) => m.db_product_id)));
       }
     } catch { setExcelPreviewError("Gagal menghubungi server."); }
     finally { setExcelPreviewing(false); }
@@ -756,16 +756,16 @@ export default function SellerDashboard() {
                 </div>
                 <div className="bg-white rounded-lg border p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <div className="flex gap-2">
-                      {(["all", "high", "ok"] as const).map((f) => (
+                    <div className="flex gap-2 flex-wrap">
+                      {(["changed", "all", "high", "ok"] as const).map((f) => (
                         <button key={f} onClick={() => setExcelFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${excelFilter === f ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}>
-                          {f === "all" ? "Semua" : f === "high" ? "Cocok Tinggi" : "Perlu Cek"}
+                          {f === "changed" ? `Ada Perubahan (${excelPreview.matched.filter(m => m.has_changes).length})` : f === "all" ? "Semua" : f === "high" ? "Cocok Tinggi" : "Perlu Cek"}
                         </button>
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.add(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Pilih Semua</button>
-                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.delete(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Batal Pilih</button>
+                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "changed" && m.has_changes) || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.add(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Pilih Semua</button>
+                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "changed" && m.has_changes) || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.delete(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Batal Pilih</button>
                       <button
                         disabled={excelSelected.size === 0 || excelApplying}
                         onClick={async () => {
@@ -802,13 +802,14 @@ export default function SellerDashboard() {
                       </thead>
                       <tbody>
                         {excelPreview.matched
-                          .filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7))
+                          .filter(m => excelFilter === "all" || (excelFilter === "changed" && m.has_changes) || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7))
                           .map((m) => (
-                            <tr key={m.db_product_id} className={`border-b last:border-0 ${excelSelected.has(m.db_product_id) ? "bg-emerald-50" : ""}`}>
+                            <tr key={m.db_product_id} className={`border-b last:border-0 ${excelSelected.has(m.db_product_id) ? "bg-emerald-50" : !m.has_changes ? "opacity-50" : ""}`}>
                               <td className="py-2 pr-3"><input type="checkbox" checked={excelSelected.has(m.db_product_id)} onChange={(e) => setExcelSelected(prev => { const s = new Set(prev); e.target.checked ? s.add(m.db_product_id) : s.delete(m.db_product_id); return s; })} className="w-4 h-4 rounded" /></td>
                               <td className="py-2 pr-3 max-w-[200px]">
                                 <p className="font-medium truncate" title={m.db_product_name}>{m.db_product_name}</p>
                                 {m.variant_matches.length > 0 && <p className="text-xs text-gray-400">{m.variant_matches.length} varian</p>}
+                                {!m.has_changes && <p className="text-xs text-gray-400 italic">Tidak ada perubahan</p>}
                               </td>
                               <td className="py-2 pr-3 max-w-[200px]"><p className="text-gray-500 text-xs truncate" title={m.shopee_product_name}>{m.shopee_product_name}</p></td>
                               <td className="py-2 pr-3 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.match_score >= 0.7 ? "bg-emerald-100 text-emerald-700" : "bg-yellow-100 text-yellow-700"}`}>{m.match_score}</span></td>

@@ -269,6 +269,20 @@ async def preview_import(
                 item["diskon_new"] = ev0.get("diskon")
                 item["tersedia_new"] = ev0.get("tersedia")
 
+        # Determine if this product has any actual value changes
+        if item["variant_matches"]:
+            has_changes = any(
+                (vm["price_new"] is not None and vm["price_new"] != vm["price_old"])
+                or (vm["stock_new"] is not None and vm["stock_new"] != vm["stock_old"])
+                for vm in item["variant_matches"]
+            )
+        else:
+            has_changes = (
+                (item["price_new"] is not None and item["price_new"] != item["price_old"])
+                or (item["stock_new"] is not None and item["stock_new"] != item["stock_old"])
+            )
+        item["has_changes"] = has_changes
+
         matched.append(item)
 
     return {
