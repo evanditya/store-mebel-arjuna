@@ -164,7 +164,7 @@ export default function SellerDashboard() {
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<"products" | "orders" | "settings" | "admins" | "import">("products");
+  const [tab, setTab] = useState<"products" | "orders" | "settings" | "admins">("products");
   const [settingsOpen, setSettingsOpen] = useState<Set<string>>(new Set(["tampilan"]));
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string; permissions: string[] } | null>(null);
@@ -182,8 +182,6 @@ export default function SellerDashboard() {
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedStockSlugs, setExpandedStockSlugs] = useState<Set<string>>(new Set());
-  const [excelImporting, setExcelImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ total: number; updated: number; skipped: number; detail?: { produk_diperbarui: number; produk_tidak_berubah: number; varian_diperbarui: number; varian_tidak_berubah: number }; not_found: string[]; not_found_count: number; errors: { row: number; name: string; error: string }[]; error_count: number } | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const syncZipRef = useRef<HTMLInputElement>(null);
   const [syncZipLoading, setSyncZipLoading] = useState(false);
@@ -231,8 +229,8 @@ export default function SellerDashboard() {
   };
   const [shopeeTestResult, setShopeeTestResult] = useState<ShopeeTestResult | null>(null);
 
-  type ExcelVariantMatch = { db_variant_id: string; db_variant_name: string; shopee_variant_name: string; variant_score: number; price_old: number | null; price_new: number | null; stock_old: number; stock_new: number | null };
-  type ExcelMatch = { db_product_id: string; db_product_name: string; shopee_product_id: string; shopee_product_name: string; match_score: number; price_old: number; price_new: number | null; stock_old: number; stock_new: number | null; variant_matches: ExcelVariantMatch[] };
+  type ExcelVariantMatch = { db_variant_id: string; db_variant_name: string; shopee_variant_name: string; variant_score: number; price_old: number | null; price_new: number | null; stock_old: number; stock_new: number | null; diskon_new?: number | null; tersedia_new?: string | null };
+  type ExcelMatch = { db_product_id: string; db_product_name: string; shopee_product_id: string; shopee_product_name: string; match_score: number; price_old: number; price_new: number | null; stock_old: number; stock_new: number | null; variant_matches: ExcelVariantMatch[]; diskon_new?: number | null; tersedia_new?: string | null; berat_new?: number | null; panjang_new?: number | null; lebar_new?: number | null; tinggi_new?: number | null; kategori_new?: string | null; deskripsi_new?: string | null; video_new?: string | null };
   type ExcelPreview = { matched: ExcelMatch[]; unmatched: { db_product_id: string; db_product_name: string }[]; summary: { total_db: number; matched_high: number; matched_ok: number; unmatched: number } };
 
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -612,25 +610,26 @@ export default function SellerDashboard() {
 
   const handleExcelExport = () => { window.open("/api/products/export-excel", "_blank"); };
 
-  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    setExcelImporting(true);
-    setImportResult(null);
-    const form = new FormData();
-    form.append("file", file);
+  const handleExcelPreview = async (file: File) => {
+    setExcelPreviewing(true);
+    setExcelPreviewError("");
+    setExcelPreview(null);
+    setExcelSelected(new Set());
+    setExcelApplyResult(null);
+    const fd = new FormData();
+    fd.append("file", file);
     try {
-      const res = await fetch("/api/products/import-excel", { method: "POST", body: form });
+      const res = await fetch("/api/excel-import/preview", { method: "POST", body: fd });
       const data = await res.json();
-      if (data.error) { alert(data.error); }
+      if (data.error) { setExcelPreviewError(data.error); }
       else {
-        setImportResult(data);
-        await loadProducts(1, productSearch);
+        setExcelPreview(data);
+        setExcelSelected(new Set(data.matched.filter((m: ExcelMatch) => m.match_score >= 0.7).map((m: ExcelMatch) => m.db_product_id)));
       }
-    } catch { alert("Gagal mengimpor file"); }
-    setExcelImporting(false);
+    } catch { setExcelPreviewError("Gagal menghubungi server."); }
+    finally { setExcelPreviewing(false); }
   };
+
   const handleStatusChange = async (orderId: string, newStatus: string) => { await fetch(`/api/orders`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: orderId, status: newStatus }) }); setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))); };
 
   const handleCreateShipment = async (orderId: string) => {
@@ -697,9 +696,6 @@ export default function SellerDashboard() {
             <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
           )}
           {user?.role === "seller" && (
-            <button onClick={() => setTab("import")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "import" ? "bg-emerald-700 text-white" : "bg-white border text-emerald-700"}`} data-testid="tab-import">Import Excel</button>
-          )}
-          {user?.role === "seller" && (
             <button onClick={() => setTab("admins")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "admins" ? "bg-indigo-700 text-white" : "bg-white border text-indigo-700"}`} data-testid="tab-admins">Kelola Admin</button>
           )}
         </div>
@@ -712,93 +708,128 @@ export default function SellerDashboard() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   Unduh Excel
                 </button>
-                <button onClick={() => excelInputRef.current?.click()} disabled={excelImporting} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5">
+                <button onClick={() => excelInputRef.current?.click()} disabled={excelPreviewing} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12" /></svg>
-                  {excelImporting ? "Mengimpor..." : "Upload Excel"}
+                  {excelPreviewing ? "Memproses..." : "Upload Excel"}
                 </button>
-                <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelImport} />
+                <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  setExcelFile(f);
+                  setExcelPreview(null);
+                  setExcelApplyResult(null);
+                  setExcelPreviewError("");
+                  setExcelSelected(new Set());
+                  handleExcelPreview(f);
+                }} />
                 <Link href="/seller/products/new" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition" data-testid="button-add-product">+ Tambah Produk</Link>
               </div>
             </div>
 
-            {importResult && (
-              <div className="mb-4 rounded-xl border bg-white shadow-sm text-sm overflow-hidden">
-                {/* Header */}
-                <div className={`flex items-center justify-between px-4 py-3 ${importResult.error_count > 0 || importResult.not_found_count > 0 ? "bg-yellow-50 border-b border-yellow-200" : "bg-green-50 border-b border-green-200"}`}>
-                  <div className="flex items-center gap-2">
-                    {importResult.error_count === 0 && importResult.not_found_count === 0 ? (
-                      <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <svg className="w-4 h-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
-                    )}
-                    <span className="font-semibold text-gray-800">Laporan Import Excel</span>
-                  </div>
-                  <button onClick={() => setImportResult(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            {/* ── Excel preview (shown after Upload Excel is clicked) ── */}
+            {excelPreviewing && (
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 flex items-center gap-3">
+                <svg className="animate-spin h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                Memproses file {excelFile?.name}…
+              </div>
+            )}
+            {excelPreviewError && (
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-center justify-between">
+                <span>{excelPreviewError}</span>
+                <button onClick={() => { setExcelPreviewError(""); setExcelFile(null); }} className="text-red-400 hover:text-red-600 text-lg leading-none ml-3">×</button>
+              </div>
+            )}
+            {excelApplyResult && (
+              <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800 flex items-center justify-between">
+                <span><strong>Berhasil!</strong> {excelApplyResult.updated_products} produk dan {excelApplyResult.updated_variants} varian diperbarui.</span>
+                <button onClick={() => setExcelApplyResult(null)} className="text-emerald-500 hover:text-emerald-700 text-lg leading-none ml-3">×</button>
+              </div>
+            )}
+            {excelPreview && (
+              <div className="mb-4 space-y-3">
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-white rounded-lg border p-3 text-center"><p className="text-xs text-gray-500 mb-1">Total Produk DB</p><p className="text-2xl font-bold">{excelPreview.summary.total_db}</p></div>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center"><p className="text-xs text-emerald-700 mb-1">Cocok Tinggi ≥0.7</p><p className="text-2xl font-bold text-emerald-700">{excelPreview.summary.matched_high}</p></div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center"><p className="text-xs text-yellow-700 mb-1">Perlu Cek 0.5–0.7</p><p className="text-2xl font-bold text-yellow-700">{excelPreview.summary.matched_ok}</p></div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center"><p className="text-xs text-red-600 mb-1">Tidak Cocok</p><p className="text-2xl font-bold text-red-600">{excelPreview.summary.unmatched}</p></div>
                 </div>
-
-                {/* Stat boxes */}
-                <div className="grid grid-cols-4 divide-x border-b">
-                  <div className="px-3 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Total Baris</p>
-                    <p className="text-2xl font-bold text-gray-800">{importResult.total}</p>
-                  </div>
-                  <div className="px-3 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Data Diubah</p>
-                    <p className="text-2xl font-bold text-green-600">{importResult.updated}</p>
-                  </div>
-                  <div className="px-3 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Tidak Berubah</p>
-                    <p className="text-2xl font-bold text-gray-400">{importResult.skipped ?? (importResult.total - importResult.updated - importResult.error_count - importResult.not_found_count)}</p>
-                  </div>
-                  <div className="px-3 py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Gagal</p>
-                    <p className={`text-2xl font-bold ${(importResult.error_count + importResult.not_found_count) > 0 ? "text-red-500" : "text-gray-400"}`}>
-                      {importResult.error_count + importResult.not_found_count}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Breakdown by sheet */}
-                {importResult.detail && (
-                  <div className="px-4 py-2.5 border-b bg-gray-50 text-xs text-gray-600">
-                    <div className="flex flex-wrap gap-x-8 gap-y-1">
-                      <span>📄 Sheet Produk — <strong className="text-green-700">{importResult.detail.produk_diperbarui} diubah</strong>, <span className="text-gray-400">{importResult.detail.produk_tidak_berubah} tidak berubah</span></span>
-                      <span>🏷️ Sheet Varian — <strong className="text-green-700">{importResult.detail.varian_diperbarui} diubah</strong>, <span className="text-gray-400">{importResult.detail.varian_tidak_berubah} tidak berubah</span></span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Not found list */}
-                {importResult.not_found.length > 0 && (
-                  <div className="px-4 py-3 border-b">
-                    <p className="text-xs font-semibold text-orange-700 mb-2">
-                      ⚠️ {importResult.not_found_count} nama produk tidak cocok (dilewati)
-                    </p>
-                    <div className="max-h-28 overflow-y-auto space-y-0.5">
-                      {importResult.not_found.map((name, i) => (
-                        <p key={i} className="text-xs text-orange-600 font-mono bg-orange-50 rounded px-2 py-0.5 truncate">{name}</p>
+                <div className="bg-white rounded-lg border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div className="flex gap-2">
+                      {(["all", "high", "ok"] as const).map((f) => (
+                        <button key={f} onClick={() => setExcelFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${excelFilter === f ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}>
+                          {f === "all" ? "Semua" : f === "high" ? "Cocok Tinggi" : "Perlu Cek"}
+                        </button>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {/* Error list */}
-                {importResult.errors.length > 0 && (
-                  <div className="px-4 py-3">
-                    <p className="text-xs font-semibold text-red-700 mb-2">
-                      ❌ {importResult.error_count} baris error
-                    </p>
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      {importResult.errors.map((e, i) => (
-                        <div key={i} className="text-xs bg-red-50 rounded px-2 py-1.5">
-                          <span className="text-red-400 font-mono mr-1">Baris {e.row}</span>
-                          <span className="text-red-700 font-medium">{e.name}</span>
-                          <span className="text-red-500 ml-1">→ {e.error}</span>
-                        </div>
-                      ))}
+                    <div className="flex gap-2">
+                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.add(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Pilih Semua</button>
+                      <button onClick={() => { const v = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7)); setExcelSelected(prev => { const s = new Set(prev); v.forEach(m => s.delete(m.db_product_id)); return s; }); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Batal Pilih</button>
+                      <button
+                        disabled={excelSelected.size === 0 || excelApplying}
+                        onClick={async () => {
+                          setExcelApplying(true);
+                          const updates = excelPreview.matched.filter(m => excelSelected.has(m.db_product_id));
+                          try {
+                            const res = await fetch("/api/excel-import/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) });
+                            const data = await res.json();
+                            if (data.success) { setExcelApplyResult(data); setExcelPreview(null); setExcelFile(null); await loadProducts(1, productSearch); }
+                            else alert(data.error || "Gagal menerapkan.");
+                          } catch { alert("Terjadi kesalahan."); }
+                          finally { setExcelApplying(false); }
+                        }}
+                        className="px-5 py-1.5 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition disabled:opacity-40"
+                      >
+                        {excelApplying ? "Menerapkan..." : `Terapkan ${excelSelected.size} Produk`}
+                      </button>
+                      <button onClick={() => { setExcelPreview(null); setExcelFile(null); setExcelPreviewError(""); }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-red-300 hover:text-red-600 transition">Batal</button>
                     </div>
                   </div>
-                )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-gray-500">
+                          <th className="pb-2 pr-3 w-8"></th>
+                          <th className="pb-2 pr-3">Produk di Toko</th>
+                          <th className="pb-2 pr-3">Nama di Excel</th>
+                          <th className="pb-2 pr-3 text-center">Skor</th>
+                          <th className="pb-2 pr-3 text-right">Harga Lama</th>
+                          <th className="pb-2 pr-3 text-right">Harga Baru</th>
+                          <th className="pb-2 pr-3 text-right">Stok Lama</th>
+                          <th className="pb-2 text-right">Stok Baru</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {excelPreview.matched
+                          .filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7))
+                          .map((m) => (
+                            <tr key={m.db_product_id} className={`border-b last:border-0 ${excelSelected.has(m.db_product_id) ? "bg-emerald-50" : ""}`}>
+                              <td className="py-2 pr-3"><input type="checkbox" checked={excelSelected.has(m.db_product_id)} onChange={(e) => setExcelSelected(prev => { const s = new Set(prev); e.target.checked ? s.add(m.db_product_id) : s.delete(m.db_product_id); return s; })} className="w-4 h-4 rounded" /></td>
+                              <td className="py-2 pr-3 max-w-[200px]">
+                                <p className="font-medium truncate" title={m.db_product_name}>{m.db_product_name}</p>
+                                {m.variant_matches.length > 0 && <p className="text-xs text-gray-400">{m.variant_matches.length} varian</p>}
+                              </td>
+                              <td className="py-2 pr-3 max-w-[200px]"><p className="text-gray-500 text-xs truncate" title={m.shopee_product_name}>{m.shopee_product_name}</p></td>
+                              <td className="py-2 pr-3 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.match_score >= 0.7 ? "bg-emerald-100 text-emerald-700" : "bg-yellow-100 text-yellow-700"}`}>{m.match_score}</span></td>
+                              <td className="py-2 pr-3 text-right text-gray-500">{m.price_old?.toLocaleString("id-ID")}</td>
+                              <td className="py-2 pr-3 text-right font-medium">{m.price_new !== null && m.price_new !== undefined ? <span className={m.price_new !== m.price_old ? "text-blue-600" : ""}>{m.price_new.toLocaleString("id-ID")}</span> : <span className="text-gray-300">—</span>}</td>
+                              <td className="py-2 pr-3 text-right text-gray-500">{m.stock_old}</td>
+                              <td className="py-2 text-right font-medium">{m.stock_new !== null && m.stock_new !== undefined ? <span className={m.stock_new !== m.stock_old ? "text-blue-600" : ""}>{m.stock_new}</span> : <span className="text-gray-300">—</span>}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {excelPreview.unmatched.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-xs font-semibold text-orange-700 mb-1">{excelPreview.unmatched.length} produk tidak cocok (dilewati):</p>
+                      <div className="flex flex-wrap gap-1">
+                        {excelPreview.unmatched.map((u, i) => <span key={i} className="text-xs bg-orange-50 text-orange-600 rounded px-2 py-0.5">{u.db_product_name}</span>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -2053,167 +2084,6 @@ export default function SellerDashboard() {
           </div>
         )}
 
-        {tab === "import" && (
-          <div className="space-y-5">
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Import Excel Shopee</h2>
-              <p className="text-sm text-gray-500 mb-4">Upload file Excel ekspor Shopee untuk memperbarui harga dan stok produk secara massal. Format: file <code className="bg-gray-100 px-1 rounded">.xlsx</code> dari menu Perbarui Produk Shopee Seller Center.</p>
-              <div className="flex flex-wrap items-end gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Pilih File Excel</label>
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    onChange={(e) => {
-                      setExcelFile(e.target.files?.[0] || null);
-                      setExcelPreview(null);
-                      setExcelApplyResult(null);
-                      setExcelPreviewError("");
-                      setExcelSelected(new Set());
-                    }}
-                    className="block text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-900 file:text-white hover:file:bg-gray-700 cursor-pointer"
-                  />
-                </div>
-                <button
-                  disabled={!excelFile || excelPreviewing}
-                  onClick={async () => {
-                    if (!excelFile) return;
-                    setExcelPreviewing(true);
-                    setExcelPreviewError("");
-                    setExcelPreview(null);
-                    setExcelSelected(new Set());
-                    setExcelApplyResult(null);
-                    const fd = new FormData();
-                    fd.append("file", excelFile);
-                    try {
-                      const res = await fetch("/api/excel-import/preview", { method: "POST", body: fd });
-                      const data = await res.json();
-                      if (data.error) { setExcelPreviewError(data.error); }
-                      else {
-                        setExcelPreview(data);
-                        setExcelSelected(new Set(data.matched.filter((m: ExcelMatch) => m.match_score >= 0.7).map((m: ExcelMatch) => m.db_product_id)));
-                      }
-                    } catch { setExcelPreviewError("Gagal menghubungi server."); }
-                    finally { setExcelPreviewing(false); }
-                  }}
-                  className="px-5 py-2 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition disabled:opacity-40"
-                >
-                  {excelPreviewing ? "Memproses..." : "Preview Perubahan"}
-                </button>
-              </div>
-              {excelPreviewError && <p className="mt-3 text-sm text-red-600">{excelPreviewError}</p>}
-            </div>
-
-            {excelPreview && (
-              <>
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="bg-white rounded-lg border p-4 text-center"><p className="text-xs text-gray-500 mb-1">Total Produk</p><p className="text-2xl font-bold">{excelPreview.summary.total_db}</p></div>
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center"><p className="text-xs text-emerald-700 mb-1">Cocok Tinggi ≥ 0.7</p><p className="text-2xl font-bold text-emerald-700">{excelPreview.summary.matched_high}</p></div>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center"><p className="text-xs text-yellow-700 mb-1">Perlu Cek 0.5–0.7</p><p className="text-2xl font-bold text-yellow-700">{excelPreview.summary.matched_ok}</p></div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center"><p className="text-xs text-red-600 mb-1">Tidak Cocok</p><p className="text-2xl font-bold text-red-600">{excelPreview.summary.unmatched}</p></div>
-                </div>
-
-                <div className="bg-white rounded-lg border p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <div className="flex gap-2">
-                      {(["all", "high", "ok"] as const).map((f) => (
-                        <button key={f} onClick={() => setExcelFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${excelFilter === f ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}>
-                          {f === "all" ? "Semua" : f === "high" ? "Cocok Tinggi" : "Perlu Cek"}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => {
-                        const visible = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7));
-                        setExcelSelected(prev => { const s = new Set(prev); visible.forEach(m => s.add(m.db_product_id)); return s; });
-                      }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Pilih Semua</button>
-                      <button onClick={() => {
-                        const visible = excelPreview.matched.filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7));
-                        setExcelSelected(prev => { const s = new Set(prev); visible.forEach(m => s.delete(m.db_product_id)); return s; });
-                      }} className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 bg-white hover:border-gray-500 transition">Batal Pilih</button>
-                      <button
-                        disabled={excelSelected.size === 0 || excelApplying}
-                        onClick={async () => {
-                          setExcelApplying(true);
-                          setExcelApplyResult(null);
-                          const updates = excelPreview.matched.filter(m => excelSelected.has(m.db_product_id));
-                          try {
-                            const res = await fetch("/api/excel-import/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) });
-                            const data = await res.json();
-                            if (data.success) { setExcelApplyResult(data); setExcelPreview(null); setExcelFile(null); }
-                            else alert(data.error || "Gagal menerapkan.");
-                          } catch { alert("Terjadi kesalahan."); }
-                          finally { setExcelApplying(false); }
-                        }}
-                        className="px-5 py-1.5 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition disabled:opacity-40"
-                      >
-                        {excelApplying ? "Menerapkan..." : `Terapkan ${excelSelected.size} Produk`}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-xs text-gray-500">
-                          <th className="pb-2 pr-3 w-8"></th>
-                          <th className="pb-2 pr-3">Produk di Toko</th>
-                          <th className="pb-2 pr-3">Nama Shopee</th>
-                          <th className="pb-2 pr-3 text-center">Skor</th>
-                          <th className="pb-2 pr-3 text-right">Harga Lama</th>
-                          <th className="pb-2 pr-3 text-right">Harga Baru</th>
-                          <th className="pb-2 pr-3 text-right">Stok Lama</th>
-                          <th className="pb-2 text-right">Stok Baru</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {excelPreview.matched
-                          .filter(m => excelFilter === "all" || (excelFilter === "high" && m.match_score >= 0.7) || (excelFilter === "ok" && m.match_score < 0.7))
-                          .map((m) => (
-                            <tr key={m.db_product_id} className={`border-b last:border-0 ${excelSelected.has(m.db_product_id) ? "bg-emerald-50" : ""}`}>
-                              <td className="py-2 pr-3">
-                                <input type="checkbox" checked={excelSelected.has(m.db_product_id)} onChange={(e) => setExcelSelected(prev => { const s = new Set(prev); e.target.checked ? s.add(m.db_product_id) : s.delete(m.db_product_id); return s; })} className="w-4 h-4 rounded" />
-                              </td>
-                              <td className="py-2 pr-3 max-w-[200px]">
-                                <p className="font-medium truncate" title={m.db_product_name}>{m.db_product_name}</p>
-                                {m.variant_matches.length > 0 && <p className="text-xs text-gray-400">{m.variant_matches.length} varian</p>}
-                              </td>
-                              <td className="py-2 pr-3 max-w-[200px]">
-                                <p className="text-gray-500 text-xs truncate" title={m.shopee_product_name}>{m.shopee_product_name}</p>
-                              </td>
-                              <td className="py-2 pr-3 text-center">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.match_score >= 0.7 ? "bg-emerald-100 text-emerald-700" : "bg-yellow-100 text-yellow-700"}`}>{m.match_score}</span>
-                              </td>
-                              <td className="py-2 pr-3 text-right text-gray-500">{m.price_old?.toLocaleString("id-ID")}</td>
-                              <td className="py-2 pr-3 text-right font-medium">
-                                {m.price_new !== null && m.price_new !== undefined
-                                  ? <span className={m.price_new !== m.price_old ? "text-blue-600" : ""}>{m.price_new.toLocaleString("id-ID")}</span>
-                                  : <span className="text-gray-300">—</span>}
-                              </td>
-                              <td className="py-2 pr-3 text-right text-gray-500">{m.stock_old}</td>
-                              <td className="py-2 text-right font-medium">
-                                {m.stock_new !== null && m.stock_new !== undefined
-                                  ? <span className={m.stock_new !== m.stock_old ? "text-blue-600" : ""}>{m.stock_new}</span>
-                                  : <span className="text-gray-300">—</span>}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {excelApplyResult && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-5 text-emerald-800">
-                <p className="font-bold mb-1">Berhasil diperbarui!</p>
-                <p className="text-sm">{excelApplyResult.updated_products} produk dan {excelApplyResult.updated_variants} varian telah diperbarui harga &amp; stoknya.</p>
-                <button onClick={() => setExcelApplyResult(null)} className="mt-3 text-sm underline">Upload file lagi</button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

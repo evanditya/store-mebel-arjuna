@@ -277,6 +277,39 @@ def _apply_sheet_style(ws, header_cols, col_widths):
     return border, Alignment(horizontal="left", vertical="top", wrap_text=True)
 
 
+_SHOPEE_ROW1_KEYS = [
+    "et_title_product_id", "et_title_product_name", "et_title_variation_id",
+    "et_title_variation_name", "et_title_parent_sku", "et_title_variation_sku",
+    "et_title_variation_price", "ps_gtin_code", "et_title_variation_stock",
+    "ps_minimum_purchase_quantity", "ps_maximum_purchase_quantity",
+    "ps_maximum_purchase_quantity_start_date", "ps_maximum_purchase_quantity_time_period",
+    "ps_maximum_purchase_quantity_end_date", "et_title_reason",
+    "", "", "", "", "", "", "", "", "",
+]
+
+_SHOPEE_DISPLAY_HEADERS = [
+    "Kode Produk", "Nama Produk", "Kode Variasi", "Nama Variasi",
+    "SKU Induk", "SKU", "Harga", "GTIN", "Stok",
+    "Min. Jumlah Pembelian", "Maks. Jumlah Pembelian",
+    "Maks. Jumlah Pembelian - Tanggal Mulai", "Maks. Jumlah Pembelian - Jumlah Hari",
+    "Maks. Jumlah Pembelian - Tanggal Berakhir", "Alasan Gagal",
+    "Harga Diskon", "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
+    "Kategori", "Deskripsi", "Video Produk", "Tersedia (Ya/Tidak)",
+]
+
+_SHOPEE_ROW4 = [
+    "", "", "", "", "", "", "Wajib", "", "Wajib",
+    "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "",
+]
+
+_COL_WIDTHS = [
+    14, 42, 14, 35, 12, 12, 14, 10, 10,
+    10, 10, 10, 10, 10, 12,
+    14, 12, 12, 12, 12, 20, 55, 35, 16,
+]
+
+
 @router.get("/products/export-excel")
 async def export_products_excel(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -284,61 +317,119 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
 
     from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
     products = db.query(Product).options(joinedload(Product.variants)).order_by(Product.name).all()
 
     wb = Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
 
-    # ── Sheet 1: Product info ────────────────────────────────────────────────
-    ws1 = wb.active
-    ws1.title = "Produk"
-    prod_cols = ["Nama Produk", "Harga", "Harga Diskon", "Stok (tanpa varian)",
-                 "Berat (gram)", "Panjang (cm)", "Lebar (cm)", "Tinggi (cm)",
-                 "Kategori", "Deskripsi", "Video Produk"]
-    prod_widths = [42, 16, 16, 18, 13, 13, 13, 13, 22, 55, 35]
-    border1, left1 = _apply_sheet_style(ws1, prod_cols, prod_widths)
+    # ── Style helpers ────────────────────────────────────────────────────────
+    thin = Side(style="thin", color="D1D5DB")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=False)
 
-    for row_idx, p in enumerate(products, start=2):
-        display_variants = _get_purchaseable_variants(p.variants)
-        # For products WITH variants, stock is managed per-variant in Sheet 2
-        stok_cell = "" if display_variants else (p.stock or 0)
-        row = [p.name, int(p.price),
-               int(p.original_price) if p.original_price else "",
-               stok_cell,
-               p.weight or 500, p.length or 10, p.width or 10, p.height or 10,
-               p.category or "", p.description or "", p.video_url or ""]
-        for col_idx, value in enumerate(row, start=1):
-            cell = ws1.cell(row=row_idx, column=col_idx, value=value)
-            cell.border = border1
-            cell.alignment = left1
-            if col_idx in (2, 3):
-                cell.number_format = '#,##0'
-        ws1.row_dimensions[row_idx].height = 18
+    def _hdr_cell(row, col, value, bg="1F4E78"):
+        c = ws.cell(row=row, column=col, value=value)
+        c.font = Font(bold=True, color="FFFFFF", size=10)
+        c.fill = PatternFill("solid", fgColor=bg)
+        c.alignment = center
+        c.border = border
+        return c
 
-    # ── Sheet 2: Variants (one row per purchaseable variant) ─────────────────
-    ws2 = wb.create_sheet(title="Varian")
-    var_cols = ["Nama Produk", "Nama Varian", "Harga Asli", "Harga Diskon", "Stok", "Tersedia (Ya/Tidak)"]
-    var_widths = [42, 45, 16, 16, 10, 18]
-    border2, left2 = _apply_sheet_style(ws2, var_cols, var_widths)
+    def _extra_hdr_cell(row, col, value):
+        c = ws.cell(row=row, column=col, value=value)
+        c.font = Font(bold=True, color="FFFFFF", size=10)
+        c.fill = PatternFill("solid", fgColor="145A32")
+        c.alignment = center
+        c.border = border
+        return c
 
-    row_idx = 2
+    # ── Row 1: Shopee internal keys ──────────────────────────────────────────
+    for col_idx, key in enumerate(_SHOPEE_ROW1_KEYS, start=1):
+        c = ws.cell(row=1, column=col_idx, value=key)
+        c.font = Font(size=9, color="999999")
+
+    # ── Row 2: metadata placeholder ──────────────────────────────────────────
+    ws.cell(row=2, column=1, value="sales_info")
+
+    # ── Row 3: display headers ───────────────────────────────────────────────
+    for col_idx, hdr in enumerate(_SHOPEE_DISPLAY_HEADERS, start=1):
+        if col_idx <= 15:
+            _hdr_cell(3, col_idx, hdr)
+        else:
+            _extra_hdr_cell(3, col_idx, hdr)
+        ws.column_dimensions[ws.cell(3, col_idx).column_letter].width = _COL_WIDTHS[col_idx - 1]
+
+    # ── Row 4: "Wajib" markers ───────────────────────────────────────────────
+    for col_idx, val in enumerate(_SHOPEE_ROW4, start=1):
+        if val:
+            c = ws.cell(row=4, column=col_idx, value=val)
+            c.font = Font(bold=True, color="C0392B", size=9)
+            c.alignment = center
+
+    # ── Rows 5-6: empty spacers ──────────────────────────────────────────────
+    ws.row_dimensions[1].height = 15
+    ws.row_dimensions[2].height = 13
+    ws.row_dimensions[3].height = 22
+    ws.row_dimensions[4].height = 15
+
+    # ── Data rows starting at row 7 ──────────────────────────────────────────
+    row_idx = 7
     for p in products:
         display_variants = _get_purchaseable_variants(p.variants)
-        for v in display_variants:
-            display_name = v.variant_name
-            row = [p.name, display_name,
-                   int(v.price) if v.price is not None else int(p.price),
-                   int(v.original_price) if v.original_price else "",
-                   v.stock or 0,
-                   "Ya" if v.is_available else "Tidak"]
-            for col_idx, value in enumerate(row, start=1):
-                cell = ws2.cell(row=row_idx, column=col_idx, value=value)
-                cell.border = border2
-                cell.alignment = left2
-                if col_idx in (3, 4):
-                    cell.number_format = '#,##0'
-            ws2.row_dimensions[row_idx].height = 18
+
+        def _data_row(variant_name, price, diskon, stock, tersedia):
+            nonlocal row_idx
+            vals = [
+                "",                                         # A: Kode Produk (empty — no Shopee ID)
+                p.name,                                     # B: Nama Produk
+                "",                                         # C: Kode Variasi (empty)
+                variant_name or "",                         # D: Nama Variasi
+                "", "",                                     # E-F: SKU Induk, SKU
+                price,                                      # G: Harga
+                "",                                         # H: GTIN
+                stock,                                      # I: Stok
+                "", "", "", "", "",                         # J-N: pembelian limits (empty)
+                "",                                         # O: Alasan Gagal
+                diskon or "",                               # P: Harga Diskon
+                p.weight or 500,                            # Q: Berat
+                p.length or 10,                             # R: Panjang
+                p.width or 10,                              # S: Lebar
+                p.height or 10,                             # T: Tinggi
+                p.category or "",                           # U: Kategori
+                p.description or "",                        # V: Deskripsi
+                p.video_url or "",                          # W: Video
+                tersedia,                                   # X: Tersedia
+            ]
+            for col_idx2, value in enumerate(vals, start=1):
+                c = ws.cell(row=row_idx, column=col_idx2, value=value)
+                c.border = border
+                c.alignment = left
+                if col_idx2 in (7, 16):
+                    c.number_format = "#,##0"
+            ws.row_dimensions[row_idx].height = 16
             row_idx += 1
+
+        if display_variants:
+            for v in display_variants:
+                _data_row(
+                    variant_name=v.variant_name,
+                    price=int(v.price) if v.price is not None else int(p.price or 0),
+                    diskon=int(v.original_price) if v.original_price else None,
+                    stock=v.stock or 0,
+                    tersedia="Ya" if v.is_available else "Tidak",
+                )
+        else:
+            _data_row(
+                variant_name="",
+                price=int(p.price or 0),
+                diskon=int(p.original_price) if p.original_price else None,
+                stock=p.stock or 0,
+                tersedia="Ya" if (p.is_available is not False) else "Tidak",
+            )
 
     stream = io.BytesIO()
     wb.save(stream)
@@ -346,7 +437,7 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
     return StreamingResponse(
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=produk.xlsx"},
+        headers={"Content-Disposition": "attachment; filename=produk-shopee.xlsx"},
     )
 
 
