@@ -293,12 +293,28 @@ export default function EditProductPage() {
       setError("Harap isi: " + Object.keys(missing).map(k => labels[k]).join(", "));
       return;
     }
+
+    // Validate: discount price must be less than original price
+    if (originalPrice && Number(originalPrice) >= Number(price)) {
+      setFieldErrors({ ...missing, originalPrice: true });
+      setError("Harga Diskon harus lebih kecil dari Harga Asli.");
+      return;
+    }
     setFieldErrors({});
 
     if (combinations.length > 0) {
       const cErr: Record<number, boolean> = {};
-      combinations.forEach((c, i) => { if (c.stock === null || c.stock === undefined) cErr[i] = true; });
-      if (Object.keys(cErr).length > 0) { setComboErrors(cErr); setError("Harap isi Stok untuk setiap kombinasi varian."); return; }
+      combinations.forEach((c, i) => {
+        if (c.stock === null || c.stock === undefined) cErr[i] = true;
+        if (c.original_price != null && c.price != null && c.original_price >= c.price) cErr[i] = true;
+      });
+      if (Object.keys(cErr).length > 0) {
+        setComboErrors(cErr);
+        const hasStockErr = combinations.some((c, i) => cErr[i] && (c.stock === null || c.stock === undefined));
+        const hasPriceErr = combinations.some((c, i) => cErr[i] && c.original_price != null && c.price != null && c.original_price >= c.price);
+        setError(hasPriceErr ? "Harga Diskon varian harus lebih kecil dari Harga Asli varian." : "Harap isi Stok untuk setiap kombinasi varian.");
+        return;
+      }
     }
     setComboErrors({});
 
@@ -384,7 +400,7 @@ export default function EditProductPage() {
                     )}
                   </div>
                 </label>
-                <input type="text" inputMode="numeric" value={fmtNum(originalPrice)} onChange={e => setOriginalPrice(stripFmt(e.target.value))} className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="0" data-testid="input-product-original-price" />
+                <input type="text" inputMode="numeric" value={fmtNum(originalPrice)} onChange={e => { setOriginalPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, originalPrice: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.originalPrice ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-original-price" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
@@ -592,8 +608,8 @@ export default function EditProductPage() {
                         <input
                           type="text" inputMode="numeric"
                           value={fmtNum(combo.original_price ?? "")}
-                          onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "original_price", r ? Number(r) : null); }}
-                          className="w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 focus:ring-gray-900"
+                          onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "original_price", r ? Number(r) : null); setComboErrors(p => ({ ...p, [cIdx]: false })); }}
+                          className={`w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 ${comboErrors[cIdx] && combo.original_price != null && combo.price != null && combo.original_price >= combo.price ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
                           placeholder="—"
                           data-testid={`input-combo-discount-${cIdx}`}
                         />
