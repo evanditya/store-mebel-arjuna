@@ -164,7 +164,8 @@ export default function SellerDashboard() {
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<"products" | "orders" | "banners" | "settings" | "admins" | "import">("products");
+  const [tab, setTab] = useState<"products" | "orders" | "settings" | "admins" | "import">("products");
+  const [settingsOpen, setSettingsOpen] = useState<Set<string>>(new Set(["tampilan"]));
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ name: string; role: string; permissions: string[] } | null>(null);
   const [adminUsers, setAdminUsers] = useState<{ id: string; name: string; email: string; permissions: string[]; created_at: string }[]>([]);
@@ -378,7 +379,7 @@ export default function SellerDashboard() {
       setUser(data.user);
       if (data.user.role === "admin") {
         const perms: string[] = data.user.permissions || [];
-        const firstTab = (["products", "orders", "banners", "settings"] as const).find((p) => perms.includes(p));
+        const firstTab = (["products", "orders", "settings"] as const).find((p) => perms.includes(p) || (p === "settings" && perms.includes("banners")));
         if (firstTab) setTab(firstTab);
       }
       if (data.user.role === "seller") {
@@ -514,7 +515,7 @@ export default function SellerDashboard() {
   };
 
   useEffect(() => {
-    if (tab === "settings") loadShopeeAll();
+    if (tab === "settings") { loadShopeeAll(); loadBanners(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -692,10 +693,7 @@ export default function SellerDashboard() {
           {(user?.role === "seller" || (user?.permissions || []).includes("orders")) && (
             <button onClick={() => setTab("orders")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "orders" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-orders">Pesanan ({orders.length})</button>
           )}
-          {(user?.role === "seller" || (user?.permissions || []).includes("banners")) && (
-            <button onClick={() => setTab("banners")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "banners" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-banners">Banner ({banners.length})</button>
-          )}
-          {(user?.role === "seller" || (user?.permissions || []).includes("settings")) && (
+          {(user?.role === "seller" || (user?.permissions || []).includes("settings") || (user?.permissions || []).includes("banners")) && (
             <button onClick={() => setTab("settings")} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === "settings" ? "bg-gray-900 text-white" : "bg-white border text-gray-700"}`} data-testid="tab-settings">Pengaturan</button>
           )}
           {user?.role === "seller" && (
@@ -1035,63 +1033,28 @@ export default function SellerDashboard() {
             {orders.length === 0 && <div className="text-center py-12 text-gray-400">Belum ada pesanan</div>}
           </div>
         )}
-        {tab === "banners" && (
-          <div className="space-y-4">
+        {tab === "settings" && (
+          <div className="space-y-2">
             {showCropper && (
               <BannerCropper onComplete={handleCropperComplete} onClose={() => setShowCropper(false)} />
             )}
-            <div className="bg-white rounded-lg border p-6">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h2 className="font-bold text-lg">Manajemen Banner</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Upload, atur urutan, dan aktifkan/nonaktifkan banner toko. Rasio 3:1 (1200 × 400 px).</p>
-                </div>
-                <button
-                  onClick={() => setShowCropper(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  Tambah Banner
-                </button>
-              </div>
-              {savingOrder && <p className="text-xs text-gray-400 mb-2">Menyimpan urutan...</p>}
-              {banners.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <div className="text-5xl mb-3">🖼️</div>
-                  <p className="font-medium text-gray-500">Belum ada banner</p>
-                  <p className="text-sm mt-1">Klik "Tambah Banner" untuk upload gambar pertama</p>
-                </div>
-              ) : (
-                <DndContext sensors={bannerSensors} collisionDetection={closestCenter} onDragEnd={handleBannerDragEnd}>
-                  <SortableContext items={banners.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3 mt-4">
-                      {banners.map((b) => (
-                        <SortableBannerItem
-                          key={b.id}
-                          banner={b}
-                          onToggle={handleBannerToggle}
-                          onDelete={handleBannerDelete}
-                          titleVal={bannerForms[b.id]?.title ?? ""}
-                          linkVal={bannerForms[b.id]?.link ?? ""}
-                          onTitleChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], title: val } }))}
-                          onLinkChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], link: val } }))}
-                          onSave={handleBannerSave}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-              )}
-              <p className="text-xs text-gray-400 mt-4">Drag ≡ untuk mengubah urutan. Klik toggle untuk aktifkan/nonaktifkan. Judul & link tersimpan otomatis saat klik di luar kolom.</p>
-            </div>
-          </div>
-        )}
-        {tab === "settings" && (
-          <div className="space-y-4">
 
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Tampilan Toko</h2>
-              <p className="text-sm text-gray-500 mb-5">Atur nama, logo, warna, dan font toko. Untuk banner, gunakan tab <strong>Banner</strong>.</p>
+            {/* ── Tampilan Toko ── */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("tampilan") ? n.delete("tampilan") : n.add("tampilan"); return n; })}
+                className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition"
+              >
+                <div>
+                  <h2 className="font-bold text-base">Tampilan Toko</h2>
+                  <p className="text-sm text-gray-500">Nama, logo, favicon, warna, dan font toko</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("tampilan") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("tampilan") && (
+              <div className="px-6 pb-6 pt-4 border-t">
+              <p className="text-sm text-gray-500 mb-5">Atur nama, logo, warna, dan font toko.</p>
 
               <div className="space-y-5">
                 <div>
@@ -1252,25 +1215,95 @@ export default function SellerDashboard() {
                 </div>
               </div>
             </div>
-
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Profil, Alamat & Lokasi Pengiriman</h2>
-              <p className="text-sm text-gray-500 mb-3">Kelola nama pengirim, telepon, alamat toko, dan lokasi origin pengiriman Biteship dari satu halaman.</p>
-              {!shippingAvailable && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 mb-4">
-                  <p className="font-medium">Biteship belum dikonfigurasi</p>
-                  <p className="mt-1">Tambahkan <code className="bg-yellow-100 px-1 rounded">BITESHIP_API_KEY</code> di Secrets tab untuk mengaktifkan fitur pengiriman.</p>
-                </div>
-              )}
-              <a href="/change-password" className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition" data-testid="link-edit-profile">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                Edit Profil & Pengaturan
-              </a>
+            )}
             </div>
 
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Pengambilan di Toko</h2>
-              <p className="text-sm text-gray-500 mb-4">Aktifkan opsi &quot;Ambil di Toko&quot; saat checkout, dan atur jam operasional pengambilan barang.</p>
+            {/* ── Banner Toko ── */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("banner") ? n.delete("banner") : n.add("banner"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div>
+                  <h2 className="font-bold text-base">Banner Toko</h2>
+                  <p className="text-sm text-gray-500">Upload, urutkan, dan aktifkan/nonaktifkan banner halaman utama · {banners.length} banner</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("banner") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("banner") && (
+              <div className="px-6 pb-6 pt-4 border-t">
+                <div className="flex items-start justify-between mb-4 gap-4">
+                  <p className="text-sm text-gray-500">Rasio gambar 3:1 (1200 × 400 px). Drag ≡ untuk mengubah urutan. Klik toggle untuk aktifkan/nonaktifkan.</p>
+                  <button onClick={() => setShowCropper(true)} className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    Tambah Banner
+                  </button>
+                </div>
+                {savingOrder && <p className="text-xs text-gray-400 mb-2">Menyimpan urutan...</p>}
+                {banners.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="text-4xl mb-3">🖼️</div>
+                    <p className="font-medium text-gray-500">Belum ada banner</p>
+                    <p className="text-sm mt-1">Klik &quot;Tambah Banner&quot; untuk upload gambar pertama</p>
+                  </div>
+                ) : (
+                  <DndContext sensors={bannerSensors} collisionDetection={closestCenter} onDragEnd={handleBannerDragEnd}>
+                    <SortableContext items={banners.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-3">
+                        {banners.map((b) => (
+                          <SortableBannerItem
+                            key={b.id}
+                            banner={b}
+                            onToggle={handleBannerToggle}
+                            onDelete={handleBannerDelete}
+                            titleVal={bannerForms[b.id]?.title ?? ""}
+                            linkVal={bannerForms[b.id]?.link ?? ""}
+                            onTitleChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], title: val } }))}
+                            onLinkChange={(val) => setBannerForms((prev) => ({ ...prev, [b.id]: { ...prev[b.id], link: val } }))}
+                            onSave={handleBannerSave}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+              )}
+            </div>
+
+            {/* ── Profil & Pengiriman ── */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("profil") ? n.delete("profil") : n.add("profil"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div>
+                  <h2 className="font-bold text-base">Profil, Alamat & Lokasi Pengiriman</h2>
+                  <p className="text-sm text-gray-500">Nama pengirim, telepon, alamat toko, dan lokasi asal pengiriman</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("profil") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("profil") && (
+              <div className="px-6 pb-6 pt-4 border-t">
+                {!shippingAvailable && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 mb-4">
+                    <p className="font-medium">Biteship belum dikonfigurasi</p>
+                    <p className="mt-1">Tambahkan <code className="bg-yellow-100 px-1 rounded">BITESHIP_API_KEY</code> di Secrets tab untuk mengaktifkan fitur pengiriman.</p>
+                  </div>
+                )}
+                <a href="/change-password" className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition" data-testid="link-edit-profile">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  Edit Profil & Pengaturan
+                </a>
+              </div>
+              )}
+            </div>
+
+            {/* ── Pengambilan di Toko ── */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("pickup") ? n.delete("pickup") : n.add("pickup"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div>
+                  <h2 className="font-bold text-base">Pengambilan di Toko</h2>
+                  <p className="text-sm text-gray-500">Opsi &quot;Ambil di Toko&quot; saat checkout dan jam operasional</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("pickup") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("pickup") && (
+              <div className="px-6 pb-6 pt-4 border-t">
               <div className="space-y-4">
                 <label className="flex items-center gap-3 cursor-pointer select-none">
                   <div
@@ -1360,13 +1393,22 @@ export default function SellerDashboard() {
                 </div>
               </div>
             </div>
+            )}
+            </div>
 
+            {/* ── Kurir Aktif ── */}
             {shippingAvailable && (
-              <div className="bg-white rounded-lg border p-6">
-                <h2 className="font-bold text-lg mb-1">Kurir Aktif</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  Pilih kurir yang tersedia untuk pembeli saat checkout. Hanya kurir yang dicentang yang akan ditampilkan.
-                </p>
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("kurir") ? n.delete("kurir") : n.add("kurir"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div>
+                  <h2 className="font-bold text-base">Kurir Aktif</h2>
+                  <p className="text-sm text-gray-500">Kurir yang ditampilkan kepada pembeli saat checkout</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("kurir") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("kurir") && (
+              <div className="px-6 pb-6 pt-4 border-t">
+                <p className="text-sm text-gray-500 mb-4">Pilih kurir yang tersedia untuk pembeli saat checkout. Hanya kurir yang dicentang yang akan ditampilkan.</p>
                 {allCouriers.length === 0 ? (
                   <p className="text-sm text-gray-400">Memuat daftar kurir...</p>
                 ) : (
@@ -1425,14 +1467,22 @@ export default function SellerDashboard() {
                   </>
                 )}
               </div>
+              )}
+            </div>
             )}
 
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="font-bold text-lg mb-1">Sinkronisasi Produk dari ZIP</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Upload file ZIP hasil scraping Shopee untuk memperbarui produk, varian, dan gambar secara otomatis.
-                Produk yang cocok (berdasarkan ID Shopee atau nama) akan diperbarui. Produk manual yang tidak ada di ZIP tidak akan tersentuh.
-              </p>
+            {/* ── Sinkronisasi ZIP ── */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("zip") ? n.delete("zip") : n.add("zip"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div>
+                  <h2 className="font-bold text-base">Sinkronisasi Produk dari ZIP</h2>
+                  <p className="text-sm text-gray-500">Upload ZIP hasil scraping Shopee untuk memperbarui produk dan varian</p>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("zip") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("zip") && (
+              <div className="px-6 pb-6 pt-4 border-t">
+              <p className="text-sm text-gray-500 mb-4">Upload file ZIP hasil scraping Shopee untuk memperbarui produk, varian, dan gambar secara otomatis. Produk yang cocok akan diperbarui; produk manual yang tidak ada di ZIP tidak akan tersentuh.</p>
               <div className="flex items-center gap-3 flex-wrap">
                 <input
                   ref={syncZipRef}
@@ -1551,15 +1601,26 @@ export default function SellerDashboard() {
                   )}
                 </div>
               )}
+              </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-lg border p-6" data-testid="card-shopee-sync">
-              <div className="flex items-start justify-between flex-wrap gap-3 mb-1">
-                <h2 className="font-bold text-lg">Sinkronisasi Shopee</h2>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${shopeeStatus?.imap_configured ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                  {shopeeStatus?.imap_configured ? "IMAP terhubung" : "IMAP belum dikonfigurasi"}
-                </span>
-              </div>
+            {/* ── Sinkronisasi Shopee ── */}
+            <div className="bg-white rounded-lg border overflow-hidden" data-testid="card-shopee-sync">
+              <button type="button" onClick={() => setSettingsOpen((prev) => { const n = new Set(prev); n.has("shopee") ? n.delete("shopee") : n.add("shopee"); return n; })} className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div>
+                    <h2 className="font-bold text-base">Sinkronisasi Shopee</h2>
+                    <p className="text-sm text-gray-500">Otomatis kurangi stok saat pesanan Shopee diterima pembeli</p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${shopeeStatus?.imap_configured ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                    {shopeeStatus?.imap_configured ? "IMAP terhubung" : "IMAP belum dikonfigurasi"}
+                  </span>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${settingsOpen.has("shopee") ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {settingsOpen.has("shopee") && (
+              <div className="px-6 pb-6 pt-4 border-t">
               <p className="text-sm text-gray-500 mb-4">
                 Otomatis mengurangi stok produk saat pembeli Shopee menerima pesanan. Sistem memantau email <strong>&quot;Pesanan Telah Diterima Pembeli&quot;</strong> dari Shopee.
               </p>
@@ -1866,6 +1927,8 @@ export default function SellerDashboard() {
                     })}
                   </div>
                 </div>
+              )}
+              </div>
               )}
             </div>
           </div>
