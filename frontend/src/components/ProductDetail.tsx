@@ -33,7 +33,9 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
   const hasDiscount = !!(product.original_price && product.original_price < product.price);
   const effectiveBase = getEffectiveBase(product.price, product.original_price);
   const [quantity, setQuantity] = useState(1);
-  const images = product.images.length > 0 ? product.images : [product.primary_image];
+  const PLACEHOLDER = "/images/placeholder.svg";
+  const rawImages = product.images.length > 0 ? product.images : [product.primary_image];
+  const images = rawImages.map((img) => img || PLACEHOLDER);
 
   // Detect new multi-group format: variant_type contains " / " (e.g. "Warna / Ukuran")
   const isNewCombinationFormat = useMemo(() => {
@@ -264,10 +266,10 @@ export default function ProductDetail({ product, formatPrice, formatSoldCount, o
           <button onClick={onClose} className="absolute top-3 right-3 z-10 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center" data-testid="button-close-detail">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-          <div className="aspect-square rounded-lg overflow-hidden mb-3"><img src={images[selectedImage]} alt={product.name} className="w-full h-full object-cover" /></div>
+          <div className="aspect-square rounded-lg overflow-hidden mb-3"><img src={images[selectedImage]} alt={product.name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = PLACEHOLDER; }} /></div>
           {images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto mb-4">
-              {images.map((img, i) => (<button key={i} onClick={() => setSelectedImage(i)} className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 ${i === selectedImage ? "border-gray-900" : "border-transparent"}`}><img src={img} alt="" className="w-full h-full object-cover" /></button>))}
+              {images.map((img, i) => (<button key={i} onClick={() => setSelectedImage(i)} className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 ${i === selectedImage ? "border-gray-900" : "border-transparent"}`}><img src={img} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = PLACEHOLDER; }} /></button>))}
             </div>
           )}
           <h2 className="text-lg font-bold mb-1">{product.name}</h2>

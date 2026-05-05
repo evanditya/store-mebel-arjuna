@@ -79,7 +79,13 @@ export default function ProductCard({ product, formatPrice, formatSoldCount, onC
       data-testid={`product-card-${product.slug}`}
     >
       <div className="aspect-square relative">
-        <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+        <img
+          src={product.primary_image || "/images/placeholder.svg"}
+          alt={product.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/placeholder.svg"; }}
+        />
         {hasDiscount && !isOutOfStock && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{maxDiscPct}%</span>
         )}
