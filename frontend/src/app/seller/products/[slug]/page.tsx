@@ -400,7 +400,24 @@ export default function EditProductPage() {
                     )}
                   </div>
                 </label>
-                <input type="text" inputMode="numeric" value={fmtNum(originalPrice)} onChange={e => { setOriginalPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, originalPrice: false })); }} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${fieldErrors.originalPrice ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`} placeholder="0" data-testid="input-product-original-price" />
+                {(() => {
+                  const discountInvalid = !!originalPrice && !!price && Number(originalPrice) >= Number(price);
+                  return (
+                    <>
+                      <input
+                        type="text" inputMode="numeric"
+                        value={fmtNum(originalPrice)}
+                        onChange={e => { setOriginalPrice(stripFmt(e.target.value)); setFieldErrors(p => ({ ...p, originalPrice: false })); }}
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 outline-none ${discountInvalid || fieldErrors.originalPrice ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
+                        placeholder="0"
+                        data-testid="input-product-original-price"
+                      />
+                      {discountInvalid && (
+                        <p className="text-xs text-red-500 mt-1">⚠ Harga diskon harus lebih kecil dari harga asli</p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
@@ -593,48 +610,57 @@ export default function EditProductPage() {
                     <span className="text-right">Stok</span>
                     <span className="text-center">Tampil</span>
                   </div>
-                  {combinations.map((combo, cIdx) => (
-                    <div key={cIdx} className={`grid items-center gap-2 px-4 py-2.5 border-b border-gray-100 last:border-b-0 ${cIdx % 2 === 1 ? "bg-gray-50/40" : "bg-white"}`} style={{ gridTemplateColumns: "1fr 7rem 7rem 5rem 3.5rem" }} data-testid={`combo-row-${cIdx}`}>
-                      <span className="text-sm font-medium text-gray-800 truncate">{combo.comboKeys.join(" / ")}</span>
-                      <input
-                        type="text" inputMode="numeric"
-                        value={fmtNum(combo.price ?? "")}
-                        onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "price", r ? Number(r) : null); }}
-                        className="w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 focus:ring-gray-900"
-                        placeholder="—"
-                        data-testid={`input-combo-price-${cIdx}`}
-                      />
-                      <div className="relative">
+                  {combinations.map((combo, cIdx) => {
+                    const comboPriceInvalid = combo.original_price != null && combo.price != null && combo.original_price >= combo.price;
+                    const comboStockInvalid = comboErrors[cIdx] && (combo.stock === null || combo.stock === undefined);
+                    return (
+                    <div key={cIdx} className={`border-b border-gray-100 last:border-b-0 ${cIdx % 2 === 1 ? "bg-gray-50/40" : "bg-white"}`} data-testid={`combo-row-${cIdx}`}>
+                      <div className="grid items-center gap-2 px-4 py-2.5" style={{ gridTemplateColumns: "1fr 7rem 7rem 5rem 3.5rem" }}>
+                        <span className="text-sm font-medium text-gray-800 truncate">{combo.comboKeys.join(" / ")}</span>
                         <input
                           type="text" inputMode="numeric"
-                          value={fmtNum(combo.original_price ?? "")}
-                          onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "original_price", r ? Number(r) : null); setComboErrors(p => ({ ...p, [cIdx]: false })); }}
-                          className={`w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 ${comboErrors[cIdx] && combo.original_price != null && combo.price != null && combo.original_price >= combo.price ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
+                          value={fmtNum(combo.price ?? "")}
+                          onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "price", r ? Number(r) : null); }}
+                          className="w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 focus:ring-gray-900"
                           placeholder="—"
-                          data-testid={`input-combo-discount-${cIdx}`}
+                          data-testid={`input-combo-price-${cIdx}`}
                         />
-                        <button type="button" onClick={() => setOpenComboTip(openComboTip === cIdx ? null : cIdx)} className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[8px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none">!</button>
-                        {openComboTip === cIdx && (
-                          <div className="absolute right-0 top-8 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600">
-                            Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
-                          </div>
-                        )}
+                        <div className="relative">
+                          <input
+                            type="text" inputMode="numeric"
+                            value={fmtNum(combo.original_price ?? "")}
+                            onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "original_price", r ? Number(r) : null); setComboErrors(p => ({ ...p, [cIdx]: false })); }}
+                            className={`w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 ${comboPriceInvalid ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
+                            placeholder="—"
+                            data-testid={`input-combo-discount-${cIdx}`}
+                          />
+                          <button type="button" onClick={() => setOpenComboTip(openComboTip === cIdx ? null : cIdx)} className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[8px] font-bold flex items-center justify-center hover:bg-gray-300 leading-none">!</button>
+                          {openComboTip === cIdx && (
+                            <div className="absolute right-0 top-8 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 text-xs text-gray-600">
+                              Jika diisi, harga asli dicoret &amp; harga diskon jadi harga jual
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          type="text" inputMode="numeric"
+                          value={combo.stock === null || combo.stock === undefined ? "" : fmtNum(combo.stock)}
+                          onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "stock", r ? Number(r) : null); setComboErrors(p => ({ ...p, [cIdx]: false })); }}
+                          className={`w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 ${comboStockInvalid ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
+                          placeholder="0"
+                          data-testid={`input-combo-stock-${cIdx}`}
+                        />
+                        <div className="flex justify-center">
+                          <button type="button" onClick={() => updateCombo(cIdx, "is_available", !combo.is_available)} className={`w-10 h-5 rounded-full transition-colors duration-200 relative flex-shrink-0 ${combo.is_available ? "bg-green-500" : "bg-gray-300"}`} data-testid={`toggle-combo-available-${cIdx}`}>
+                            <span className={`absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${combo.is_available ? "translate-x-5" : "translate-x-0.5"}`} />
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        type="text" inputMode="numeric"
-                        value={combo.stock === null || combo.stock === undefined ? "" : fmtNum(combo.stock)}
-                        onChange={e => { const r = stripFmt(e.target.value); updateCombo(cIdx, "stock", r ? Number(r) : null); setComboErrors(p => ({ ...p, [cIdx]: false })); }}
-                        className={`w-full px-2 py-1.5 border rounded-lg text-sm text-right outline-none focus:ring-2 ${comboErrors[cIdx] ? "border-red-400 focus:ring-red-300" : "focus:ring-gray-900"}`}
-                        placeholder="0"
-                        data-testid={`input-combo-stock-${cIdx}`}
-                      />
-                      <div className="flex justify-center">
-                        <button type="button" onClick={() => updateCombo(cIdx, "is_available", !combo.is_available)} className={`w-10 h-5 rounded-full transition-colors duration-200 relative flex-shrink-0 ${combo.is_available ? "bg-green-500" : "bg-gray-300"}`} data-testid={`toggle-combo-available-${cIdx}`}>
-                          <span className={`absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${combo.is_available ? "translate-x-5" : "translate-x-0.5"}`} />
-                        </button>
-                      </div>
+                      {comboPriceInvalid && (
+                        <p className="text-xs text-red-500 px-4 pb-2">⚠ Harga diskon harus lebih kecil dari harga asli</p>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-gray-400">Total stok varian: <strong className="text-gray-600">{fmtNum(totalVariantStock)}</strong></p>
               </div>
