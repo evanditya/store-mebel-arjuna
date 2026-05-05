@@ -115,29 +115,43 @@ def _parse_excel(content: bytes):
 
 
 def _match_products(db_product_pairs, excel_products):
-    bigram_idx = defaultdict(set)
+    # Pre-compute normalised names for every Excel entry
+    excel_norm_map: dict[str, str] = {}   # norm_name -> original excel key
+    bigram_idx: dict[str, set] = defaultdict(set)
+
     for pname, v in excel_products.items():
-        toks = _norm(v["name"]).split()
+        n = _norm(v["name"])
+        excel_norm_map[n] = pname
+        toks = n.split()
         for i in range(len(toks) - 1):
             bigram_idx[toks[i] + " " + toks[i + 1]].add(pname)
         for t in toks:
-            if len(t) >= 5:
+            if len(t) >= 4:
                 bigram_idx[t].add(pname)
 
     results = []
     for db_id, db_name in db_product_pairs:
         dn = _norm(db_name)
+
+        # Fast path: exact normalised-name match → always score 1.0
+        if dn in excel_norm_map:
+            pname = excel_norm_map[dn]
+            results.append((db_id, db_name, pname, excel_products[pname]["name"], 1.0))
+            continue
+
+        # Slow path: bigram candidate lookup (no hard cap — score all candidates)
         toks = dn.split()
-        candidates = set()
+        candidates: set = set()
         for i in range(len(toks) - 1):
             candidates.update(bigram_idx.get(toks[i] + " " + toks[i + 1], set()))
         for t in toks:
-            if len(t) >= 5:
+            if len(t) >= 4:
                 candidates.update(bigram_idx.get(t, set()))
-        candidates = list(candidates)[:100]
+
         if not candidates:
             results.append((db_id, db_name, None, None, 0.0))
             continue
+
         best = max(candidates, key=lambda p: _score(db_name, excel_products[p]["name"]))
         s = _score(db_name, excel_products[best]["name"])
         results.append((db_id, db_name, best, excel_products[best]["name"], round(s, 3)))
