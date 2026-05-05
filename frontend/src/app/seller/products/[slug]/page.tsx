@@ -160,11 +160,11 @@ export default function EditProductPage() {
 
   const hasVariants = combinations.length > 0;
   const totalVariantStock = combinations.reduce((sum, c) => sum + (c.stock || 0), 0);
-  const minComboPrice = hasVariants
-    ? combinations.filter(c => c.price != null).reduce((min, c) => (c.price! < min ? c.price! : min), Infinity)
+  const maxComboPrice = hasVariants
+    ? combinations.filter(c => c.price != null).reduce((max, c) => (c.price! > max ? c.price! : max), -Infinity)
     : null;
-  const minComboDiscount = hasVariants
-    ? combinations.filter(c => c.original_price != null).reduce((min, c) => (c.original_price! < min ? c.original_price! : min), Infinity)
+  const maxComboDiscount = hasVariants
+    ? combinations.filter(c => c.original_price != null).reduce((max, c) => (c.original_price! > max ? c.original_price! : max), -Infinity)
     : null;
   const hasComboDiscount = hasVariants && combinations.some(c => c.original_price != null);
 
@@ -395,7 +395,7 @@ export default function EditProductPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Harga Asli (Rp)</label>
                 {hasVariants ? (
                   <>
-                    <input type="text" value={minComboPrice !== null && minComboPrice !== Infinity ? fmtNum(minComboPrice) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-price" />
+                    <input type="text" value={maxComboPrice !== null && maxComboPrice !== -Infinity ? fmtNum(maxComboPrice) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-price" />
                     <p className="text-xs text-gray-400 mt-1">Mengikuti harga varian</p>
                   </>
                 ) : (
@@ -418,7 +418,7 @@ export default function EditProductPage() {
                 </label>
                 {hasVariants ? (
                   <>
-                    <input type="text" value={hasComboDiscount && minComboDiscount !== null && minComboDiscount !== Infinity ? fmtNum(minComboDiscount) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-original-price" />
+                    <input type="text" value={hasComboDiscount && maxComboDiscount !== null && maxComboDiscount !== -Infinity ? fmtNum(maxComboDiscount) : "—"} readOnly className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none" data-testid="input-product-original-price" />
                     <p className="text-xs text-gray-400 mt-1">Mengikuti harga varian</p>
                   </>
                 ) : (
