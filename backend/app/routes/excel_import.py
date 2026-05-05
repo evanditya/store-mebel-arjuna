@@ -294,25 +294,42 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
 
     from app.models import Product, ProductVariant
 
+    # Collect all IDs upfront for bulk fetch (avoids N+M individual queries)
+    product_ids = [u["db_product_id"] for u in updates if u.get("db_product_id")]
+    variant_ids = [
+        vu["db_variant_id"]
+        for u in updates
+        for vu in u.get("variant_matches", [])
+        if vu.get("db_variant_id")
+    ]
+
+    # Two bulk queries instead of one per row
+    prod_map = {
+        p.id: p
+        for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+    }
+    var_map = {
+        v.id: v
+        for v in db.query(ProductVariant).filter(ProductVariant.id.in_(variant_ids)).all()
+    } if variant_ids else {}
+
     updated_products = 0
     updated_variants = 0
 
     for u in updates:
-        db_product_id = u.get("db_product_id")
+        prod = prod_map.get(u.get("db_product_id"))
+        if not prod:
+            continue
+
         new_price = u.get("price_new")
         new_stock = u.get("stock_new")
         variant_updates = u.get("variant_matches", [])
-
-        prod = db.query(Product).filter(Product.id == db_product_id).first()
-        if not prod:
-            continue
 
         if new_price is not None:
             prod.price = new_price
         if new_stock is not None:
             prod.stock = new_stock
 
-        # Apply product-level extras when present
         if u.get("berat_new") is not None:
             prod.weight = int(u["berat_new"])
         if u.get("panjang_new") is not None:
@@ -328,7 +345,6 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
         if u.get("video_new"):
             prod.video_url = u["video_new"]
 
-        # Product-level no-variant extras
         if not variant_updates:
             diskon = u.get("diskon_new")
             if diskon is not None:
@@ -340,22 +356,17 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
         updated_products += 1
 
         for vu in variant_updates:
-            dbv_id = vu.get("db_variant_id")
-            v_price = vu.get("price_new")
-            v_stock = vu.get("stock_new")
-            dbv = db.query(ProductVariant).filter(ProductVariant.id == dbv_id).first()
+            dbv = var_map.get(vu.get("db_variant_id"))
             if not dbv:
                 continue
-            if v_price is not None:
-                dbv.price = v_price
-            if v_stock is not None:
-                dbv.stock = v_stock
-            diskon_v = vu.get("diskon_new")
-            if diskon_v is not None:
-                dbv.original_price = float(diskon_v) if diskon_v else None
-            tersedia_v = vu.get("tersedia_new")
-            if tersedia_v:
-                dbv.is_available = tersedia_v.lower() not in ("tidak", "no", "false", "0")
+            if vu.get("price_new") is not None:
+                dbv.price = vu["price_new"]
+            if vu.get("stock_new") is not None:
+                dbv.stock = vu["stock_new"]
+            if vu.get("diskon_new") is not None:
+                dbv.original_price = float(vu["diskon_new"]) if vu["diskon_new"] else None
+            if vu.get("tersedia_new"):
+                dbv.is_available = vu["tersedia_new"].lower() not in ("tidak", "no", "false", "0")
             updated_variants += 1
 
     db.commit()
