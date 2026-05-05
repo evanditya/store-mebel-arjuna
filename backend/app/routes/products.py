@@ -415,8 +415,9 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
 
         if display_variants:
             for v in display_variants:
+                vname = (v.variant_name or "").replace(" / ", ",") if v.variant_type == "_combinations" else (v.variant_name or "")
                 _data_row(
-                    variant_name=v.variant_name,
+                    variant_name=vname,
                     price=int(v.price) if v.price is not None else int(p.price or 0),
                     diskon=int(v.original_price) if v.original_price else None,
                     stock=v.stock or 0,
