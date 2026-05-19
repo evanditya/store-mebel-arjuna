@@ -180,10 +180,14 @@ async def preview_import(
     db_product_pairs = [(p.id, p.name) for p in db_products_raw]
     db_product_map = {p.id: p for p in db_products_raw}
 
+    from app.routes.products import _get_purchaseable_variants
     all_variants = db.query(ProductVariant).all()
-    variants_by_product = defaultdict(list)
+    _all_by_product = defaultdict(list)
     for v in all_variants:
-        variants_by_product[v.product_id].append(v)
+        _all_by_product[v.product_id].append(v)
+    # Only match variants that the export actually wrote (combinations for old format,
+    # all non-combo rows for new format) — avoids false positives from display rows.
+    variants_by_product = {pid: _get_purchaseable_variants(vlist) for pid, vlist in _all_by_product.items()}
 
     matches_raw = _match_products(db_product_pairs, excel_products)
 
