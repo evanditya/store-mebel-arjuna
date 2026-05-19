@@ -434,7 +434,7 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
                     variant_name=vname,
                     price=int(v.price) if v.price is not None else int(p.price or 0),
                     diskon=int(v.original_price) if v.original_price else None,
-                    stock=v.stock or 0,
+                    stock=v.stock if v.stock is not None else "",
                     tersedia="Ya" if v.is_available else "Tidak",
                 )
         else:

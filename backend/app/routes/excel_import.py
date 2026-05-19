@@ -271,9 +271,12 @@ async def preview_import(
 
         # Determine if this product has any actual value changes
         if item["variant_matches"]:
+            prod_price_old = item["price_old"]  # product-level price as fallback
             has_changes = any(
-                (vm["price_new"] is not None and vm["price_new"] != vm["price_old"])
-                or (vm["stock_new"] is not None and vm["stock_new"] != vm["stock_old"])
+                # price: coalesce variant price to product price (variant may store None when using product price)
+                (vm["price_new"] is not None and vm["price_new"] != (vm["price_old"] if vm["price_old"] is not None else prod_price_old))
+                # stock: coalesce None to 0 (variant stock None means 0 purchaseable stock)
+                or (vm["stock_new"] is not None and (vm["stock_new"] or 0) != (vm["stock_old"] or 0))
                 for vm in item["variant_matches"]
             )
         else:
