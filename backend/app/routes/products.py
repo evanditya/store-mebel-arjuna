@@ -370,6 +370,17 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
             c.font = Font(bold=True, color="C0392B", size=9)
             c.alignment = center
 
+    # ── Hide always-empty columns & mark them ────────────────────────────────
+    _EMPTY_COLS = [1, 3, 5, 6, 8, 10, 11, 12, 13, 14, 15]   # A C E F H J-O
+    for col_idx in _EMPTY_COLS:
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].hidden = True
+        # put a note in row 4 so it's visible when user unhides
+        if not ws.cell(row=4, column=col_idx).value:
+            c = ws.cell(row=4, column=col_idx, value="tidak perlu diisi")
+            c.font = Font(italic=True, color="AAAAAA", size=8)
+            c.alignment = center
+
     # ── Rows 5-6: empty spacers ──────────────────────────────────────────────
     ws.row_dimensions[1].height = 15
     ws.row_dimensions[2].height = 13
