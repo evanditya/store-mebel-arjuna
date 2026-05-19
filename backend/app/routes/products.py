@@ -378,7 +378,6 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
         cd = ws.column_dimensions[col_letter]
         cd.hidden = True
         cd.width = _COL_WIDTHS[col_idx - 1]
-        cd.customWidth = True
         # put a note in row 4 so it's visible when user unhides
         if not ws.cell(row=4, column=col_idx).value:
             c = ws.cell(row=4, column=col_idx, value="tidak perlu diisi")
