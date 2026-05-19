@@ -371,10 +371,14 @@ async def export_products_excel(request: Request, db: Session = Depends(get_db))
             c.alignment = center
 
     # ── Hide always-empty columns & mark them ────────────────────────────────
+    from openpyxl.utils import get_column_letter
     _EMPTY_COLS = [1, 3, 5, 6, 8, 10, 11, 12, 13, 14, 15]   # A C E F H J-O
     for col_idx in _EMPTY_COLS:
-        col_letter = ws.cell(row=1, column=col_idx).column_letter
-        ws.column_dimensions[col_letter].hidden = True
+        col_letter = get_column_letter(col_idx)
+        cd = ws.column_dimensions[col_letter]
+        cd.hidden = True
+        cd.width = _COL_WIDTHS[col_idx - 1]
+        cd.customWidth = True
         # put a note in row 4 so it's visible when user unhides
         if not ws.cell(row=4, column=col_idx).value:
             c = ws.cell(row=4, column=col_idx, value="tidak perlu diisi")
