@@ -111,9 +111,13 @@ function parseVariantsToState(apiVariants: ApiVariant[], comboVariants: ApiVaria
       const v = typeMap.get(groups[0].typeName)?.byName.get(keys[0]);
       if (v) return { comboKeys: keys, price: v.price ?? null, original_price: v.original_price ?? null, stock: v.stock ?? null, is_available: v.is_available !== false };
     } else if (comboVariants.length > 0) {
-      // Multi-type old format: look up from _combinations rows by "Val1 / Val2" name
-      const name = keys.join(" / ");
-      const cv = comboVariants.find(c => (c.variant_name || "") === name);
+      // Multi-type old format: look up from _combinations rows.
+      // Sort both sides so group-order mismatch (API vs DB) doesn't break matching.
+      const sortedKeys = [...keys].sort().join(" / ");
+      const cv = comboVariants.find(c => {
+        const sortedName = (c.variant_name || "").split(" / ").sort().join(" / ");
+        return sortedName === sortedKeys;
+      });
       if (cv) return { comboKeys: keys, price: cv.price ?? null, original_price: cv.original_price ?? null, stock: cv.stock ?? null, is_available: cv.is_available !== false };
     }
     return { comboKeys: keys, price: null, original_price: null, stock: null, is_available: true };
