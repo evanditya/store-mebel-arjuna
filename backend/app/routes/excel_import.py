@@ -232,11 +232,15 @@ async def preview_import(
             for dbv in db_variants:
                 best_ev = None
                 best_vs = 0.0
+                best_exact = False
                 for ev in excel_variants:
                     vs = _score(dbv.variant_name or "", ev["var_name"] or "")
-                    if vs > best_vs:
+                    is_exact = (dbv.variant_name or "").strip().lower() == (ev["var_name"] or "").strip().lower()
+                    # prefer higher score; on tie prefer exact string match
+                    if vs > best_vs or (vs == best_vs and is_exact and not best_exact):
                         best_vs = vs
                         best_ev = ev
+                        best_exact = is_exact
                 if best_ev and (best_vs >= 0.4 or len(excel_variants) == 1):
                     item["variant_matches"].append(
                         {
