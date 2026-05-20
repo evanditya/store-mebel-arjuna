@@ -176,7 +176,7 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
         user.area_id = area_id
     if area_name:
         user.area_name = area_name
-    if area_id and user.role == "seller":
+    if user.role == "seller":
         import os, json
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json")
         config = {}
@@ -186,9 +186,14 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
                     config = json.load(f)
         except Exception:
             pass
-        config["area_id"] = area_id
+        if area_id:
+            config["area_id"] = area_id
         if postal_code:
             config["postal_code"] = postal_code
+        if phone:
+            config["phone"] = phone
+        if address is not None:
+            config["address"] = address
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
     db.commit()

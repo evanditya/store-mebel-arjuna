@@ -32,10 +32,17 @@ def _save_config(data: dict):
 
 
 @router.get("")
-async def get_branding():
+async def get_branding(db: Session = Depends(get_db)):
+    from app.models import User
     config = _load_config()
     seller_name = config.get("seller_name", "")
     site_name = config.get("site_name") or seller_name or "Toko Online"
+
+    # Fallback to seller user record in DB when config fields are empty
+    seller_user = db.query(User).filter(User.role == "seller").first()
+    db_phone = (seller_user.phone or "") if seller_user else ""
+    db_address = (seller_user.address or "") if seller_user else ""
+
     return {
         "site_name": site_name,
         "seller_name": seller_name,
@@ -49,8 +56,8 @@ async def get_branding():
         "pickup_open_time": config.get("pickup_open_time", "08:00"),
         "pickup_close_time": config.get("pickup_close_time", "17:00"),
         "pickup_days": config.get("pickup_days", ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]),
-        "store_address": config.get("store_address", ""),
-        "store_phone": config.get("store_phone", ""),
+        "store_address": config.get("store_address") or config.get("address") or db_address,
+        "store_phone": config.get("store_phone") or config.get("phone") or db_phone,
         "pickup_notes": config.get("pickup_notes", ""),
     }
 
