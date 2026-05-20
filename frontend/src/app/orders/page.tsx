@@ -260,48 +260,48 @@ export default function OrdersPage() {
                   </div>
 
                   {order.courier_service_name === "Ambil di Toko" && !order.courier_company ? (
-                    order.status === "ready_pickup" ? (
-                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 overflow-hidden">
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 overflow-hidden">
+                      {order.status === "ready_pickup" ? (
                         <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-100 border-b border-emerald-200">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                           <span className="text-sm font-semibold text-emerald-800">Pesanan Siap Diambil di Toko!</span>
                         </div>
-                        <div className="px-3 py-2.5 space-y-1.5 text-sm text-emerald-900">
-                          {pickupInfo?.pickup_days && pickupInfo.pickup_days.length > 0 && (
-                            <div className="flex gap-2">
-                              <span className="text-emerald-600 w-28 flex-shrink-0">Hari</span>
-                              <span>{pickupInfo.pickup_days.join(", ")}</span>
-                            </div>
-                          )}
-                          {pickupInfo?.pickup_open_time && pickupInfo?.pickup_close_time && (
-                            <div className="flex gap-2">
-                              <span className="text-emerald-600 w-28 flex-shrink-0">Jam Buka</span>
-                              <span className="font-medium">{pickupInfo.pickup_open_time} – {pickupInfo.pickup_close_time}</span>
-                            </div>
-                          )}
-                          {pickupInfo?.store_address && (
-                            <div className="flex gap-2">
-                              <span className="text-emerald-600 w-28 flex-shrink-0">Alamat Toko</span>
-                              <span>{pickupInfo.store_address}</span>
-                            </div>
-                          )}
-                          {pickupInfo?.store_phone && (
-                            <div className="flex gap-2">
-                              <span className="text-emerald-600 w-28 flex-shrink-0">Telepon</span>
-                              <a href={`tel:${pickupInfo.store_phone}`} className="font-medium text-emerald-700 underline">{pickupInfo.store_phone}</a>
-                            </div>
-                          )}
-                          {pickupInfo?.pickup_notes && (
-                            <p className="text-xs text-emerald-700 bg-white/60 rounded px-2 py-1.5 mt-1 border border-emerald-100">{pickupInfo.pickup_notes}</p>
-                          )}
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border-b border-emerald-200">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          <span className="text-sm font-semibold text-emerald-700">Ambil di Toko — Gratis</span>
                         </div>
+                      )}
+                      <div className="px-3 py-2.5 space-y-1.5 text-sm text-emerald-900">
+                        {pickupInfo?.pickup_days && pickupInfo.pickup_days.length > 0 && (
+                          <div className="flex gap-2">
+                            <span className="text-emerald-600 w-28 flex-shrink-0">Hari</span>
+                            <span>{pickupInfo.pickup_days.join(", ")}</span>
+                          </div>
+                        )}
+                        {pickupInfo?.pickup_open_time && pickupInfo?.pickup_close_time && (
+                          <div className="flex gap-2">
+                            <span className="text-emerald-600 w-28 flex-shrink-0">Jam Buka</span>
+                            <span className="font-medium">{pickupInfo.pickup_open_time} – {pickupInfo.pickup_close_time}</span>
+                          </div>
+                        )}
+                        {pickupInfo?.store_address && (
+                          <div className="flex gap-2">
+                            <span className="text-emerald-600 w-28 flex-shrink-0">Alamat Toko</span>
+                            <span>{pickupInfo.store_address}</span>
+                          </div>
+                        )}
+                        {pickupInfo?.store_phone && (
+                          <div className="flex gap-2">
+                            <span className="text-emerald-600 w-28 flex-shrink-0">Telepon</span>
+                            <a href={`tel:${pickupInfo.store_phone}`} className="font-medium text-emerald-700 underline">{pickupInfo.store_phone}</a>
+                          </div>
+                        )}
+                        {pickupInfo?.pickup_notes && (
+                          <p className="text-xs text-emerald-700 bg-white/60 rounded px-2 py-1.5 mt-1 border border-emerald-100">{pickupInfo.pickup_notes}</p>
+                        )}
                       </div>
-                    ) : (
-                    <div className="bg-green-50 rounded-lg p-3 mt-3 flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                      <span className="text-sm font-medium text-green-800">Ambil di Toko — Gratis</span>
                     </div>
-                    )
                   ) : order.courier_company ? (
                     <div className="bg-gray-50 rounded-lg p-3 mt-3">
                       <div className="flex items-center gap-2 text-sm">

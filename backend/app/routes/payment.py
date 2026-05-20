@@ -25,20 +25,35 @@ def _get_seller_name() -> str:
         return "Toko Online"
 
 
+def _get_pickup_info() -> dict:
+    try:
+        with open(_SELLER_CONFIG_PATH) as f:
+            d = _json.load(f)
+            return {
+                "store_address": d.get("store_address", ""),
+                "store_phone": d.get("store_phone", ""),
+                "pickup_days": d.get("pickup_days", []),
+                "pickup_open_time": d.get("pickup_open_time", ""),
+                "pickup_close_time": d.get("pickup_close_time", ""),
+                "pickup_notes": d.get("pickup_notes", ""),
+            }
+    except Exception:
+        return {}
+
+
 def _maybe_send_paid_email(order, db: Session):
     try:
         buyer = db.query(User).filter(User.id == order.user_id).first()
         if not buyer:
             return
         from app.email import snapshot_order, snapshot_user, send_order_paid_email
-        # Force-load items while the session is still open, then snapshot to plain objects.
-        # db.commit() (called before this) expires all ORM attributes, so the daemon thread
-        # must never touch the SQLAlchemy session.
         _ = list(order.items)
         order_snap = snapshot_order(order)
         buyer_snap = snapshot_user(buyer)
         seller_name = _get_seller_name()
-        threading.Thread(target=send_order_paid_email, args=(order_snap, buyer_snap, seller_name), daemon=True).start()
+        is_pickup = (order.courier_service_name or "") == "Ambil di Toko" and not (order.courier_company or "")
+        pickup_info = _get_pickup_info() if is_pickup else None
+        threading.Thread(target=send_order_paid_email, args=(order_snap, buyer_snap, seller_name, pickup_info), daemon=True).start()
         print(f"[Email] paid email queued for {buyer_snap.email}")
     except Exception as e:
         print(f"[Email] paid email error: {e}")

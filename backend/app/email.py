@@ -167,11 +167,50 @@ def _items_table(items: list) -> str:
     </table>"""
 
 
-def send_order_pending_email(order, user, seller_name: str = "Toko Online") -> bool:
+def _pickup_info_section(pickup_info: dict) -> str:
+    """Build an HTML section showing store pickup schedule for pickup orders."""
+    pi = pickup_info or {}
+    days = pi.get("pickup_days") or []
+    open_t = pi.get("pickup_open_time", "")
+    close_t = pi.get("pickup_close_time", "")
+    store_address = pi.get("store_address", "")
+    store_phone = pi.get("store_phone", "")
+    pickup_notes = pi.get("pickup_notes", "")
+    rows = ""
+    if days:
+        rows += f'<div class="info-row"><span class="info-label">Hari Operasional</span><span>{", ".join(days)}</span></div>'
+    if open_t and close_t:
+        rows += f'<div class="info-row"><span class="info-label">Jam Operasional</span><span><strong>{open_t} – {close_t}</strong></span></div>'
+    if store_address:
+        rows += f'<div class="info-row"><span class="info-label">Alamat Toko</span><span style="text-align:right;max-width:60%">{store_address}</span></div>'
+    if store_phone:
+        rows += f'<div class="info-row"><span class="info-label">No. Telepon</span><span>{store_phone}</span></div>'
+    if not rows:
+        return ""
+    notes_box = f'<div class="note-box" style="background:#fffbeb;border-color:#fde68a;color:#92400e;margin-top:10px">📝 {pickup_notes}</div>' if pickup_notes else ""
+    return f"""
+    <div class="section">
+      <div class="section-title">Informasi Pengambilan di Toko</div>
+      {rows}
+      {notes_box}
+    </div>"""
+
+
+def send_order_pending_email(order, user, seller_name: str = "Toko Online", pickup_info: dict = None) -> bool:
     subject = f"Pesanan #{order.id[:8].upper()} – Menunggu Pembayaran | {seller_name}"
     items_table = _items_table(order.items)
     items_total = sum(item.price * item.quantity for item in order.items)
     shipping_cost = order.shipping_cost or 0
+    is_pickup = (order.courier_service_name or "") == "Ambil di Toko" and not (order.courier_company or "")
+    shipping_label = "Ambil di Toko (Gratis)" if is_pickup else f"Ongkos Kirim ({(order.courier_company or '').upper()} {order.courier_service_name or ''})"
+    pickup_section = _pickup_info_section(pickup_info) if is_pickup and pickup_info else ""
+    recipient_section = "" if is_pickup else f"""
+    <div class="section">
+      <div class="section-title">Data Penerima</div>
+      <div class="info-row"><span class="info-label">Nama</span><span>{order.destination_contact_name or user.name}</span></div>
+      <div class="info-row"><span class="info-label">Telepon</span><span>{order.destination_contact_phone or user.phone or '-'}</span></div>
+      <div class="info-row"><span class="info-label">Alamat Pengiriman</span><span style="text-align:right;max-width:60%">{order.shipping_address or '-'}</span></div>
+    </div>"""
     content = f"""
     <div class="section">
       <p>Halo <strong>{user.name}</strong>,</p>
@@ -185,17 +224,13 @@ def send_order_pending_email(order, user, seller_name: str = "Toko Online") -> b
       {items_table}
       <div style="margin-top:12px">
         <div class="info-row"><span class="info-label">Subtotal Produk</span><span>{_format_idr(items_total)}</span></div>
-        <div class="info-row"><span class="info-label">Ongkos Kirim ({(order.courier_company or '').upper()} {order.courier_service_name or ''})</span><span>{_format_idr(shipping_cost)}</span></div>
+        <div class="info-row"><span class="info-label">{shipping_label}</span><span>{_format_idr(shipping_cost)}</span></div>
         <div class="info-row total-row"><span>Total Pembayaran</span><span>{_format_idr(order.total)}</span></div>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Data Penerima</div>
-      <div class="info-row"><span class="info-label">Nama</span><span>{order.destination_contact_name or user.name}</span></div>
-      <div class="info-row"><span class="info-label">Telepon</span><span>{order.destination_contact_phone or user.phone or '-'}</span></div>
-      <div class="info-row"><span class="info-label">Alamat Pengiriman</span><span style="text-align:right;max-width:60%">{order.shipping_address or '-'}</span></div>
-    </div>
+    {recipient_section}
+    {pickup_section}
 
     <div class="note-box">
       ⏳ <strong>Segera lakukan pembayaran</strong> agar pesananmu dapat segera diproses oleh penjual.
@@ -206,17 +241,22 @@ def send_order_pending_email(order, user, seller_name: str = "Toko Online") -> b
     return _send_email(user.email, subject, html)
 
 
-def send_order_paid_email(order, user, seller_name: str = "Toko Online") -> bool:
+def send_order_paid_email(order, user, seller_name: str = "Toko Online", pickup_info: dict = None) -> bool:
     subject = f"Pesanan #{order.id[:8].upper()} – Pembayaran Berhasil | {seller_name}"
     items_table = _items_table(order.items)
     items_total = sum(item.price * item.quantity for item in order.items)
     shipping_cost = order.shipping_cost or 0
+    is_pickup = (order.courier_service_name or "") == "Ambil di Toko" and not (order.courier_company or "")
 
-    tracking_section = ""
-    if order.waybill_id:
+    if is_pickup:
+        next_section = _pickup_info_section(pickup_info) if pickup_info else """
+        <div class="note-box" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534">
+          🏪 Pesananmu akan segera dipersiapkan. Kamu akan mendapat notifikasi saat barang siap diambil.
+        </div>"""
+    elif order.waybill_id:
         tracking_url = order.tracking_url or ""
         tracking_btn = f'<br/><a href="{tracking_url}" class="btn">Lacak Paket</a>' if tracking_url else ""
-        tracking_section = f"""
+        next_section = f"""
         <div class="section">
           <div class="section-title">Informasi Pengiriman</div>
           <div class="info-row"><span class="info-label">Kurir</span><span>{(order.courier_company or '').upper()} {order.courier_service_name or ''}</span></div>
@@ -224,10 +264,19 @@ def send_order_paid_email(order, user, seller_name: str = "Toko Online") -> bool
           {tracking_btn}
         </div>"""
     else:
-        tracking_section = """
+        next_section = """
         <div class="note-box">
           📦 Pesananmu sedang diproses oleh penjual dan akan segera dikirimkan. Nomor resi akan muncul setelah paket dikirim.
         </div>"""
+
+    address_section = "" if is_pickup else f"""
+    <div class="section">
+      <div class="section-title">Alamat Pengiriman</div>
+      <div class="info-row"><span class="info-label">Penerima</span><span>{order.destination_contact_name or user.name}</span></div>
+      <div class="info-row"><span class="info-label">Alamat</span><span style="text-align:right;max-width:60%">{order.shipping_address or '-'}</span></div>
+    </div>"""
+
+    shipping_label = "Ambil di Toko (Gratis)" if is_pickup else "Ongkos Kirim"
 
     content = f"""
     <div class="section">
@@ -242,18 +291,13 @@ def send_order_paid_email(order, user, seller_name: str = "Toko Online") -> bool
       {items_table}
       <div style="margin-top:12px">
         <div class="info-row"><span class="info-label">Subtotal Produk</span><span>{_format_idr(items_total)}</span></div>
-        <div class="info-row"><span class="info-label">Ongkos Kirim</span><span>{_format_idr(shipping_cost)}</span></div>
+        <div class="info-row"><span class="info-label">{shipping_label}</span><span>{_format_idr(shipping_cost)}</span></div>
         <div class="info-row total-row"><span>Total Pembayaran</span><span>{_format_idr(order.total)}</span></div>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Alamat Pengiriman</div>
-      <div class="info-row"><span class="info-label">Penerima</span><span>{order.destination_contact_name or user.name}</span></div>
-      <div class="info-row"><span class="info-label">Alamat</span><span style="text-align:right;max-width:60%">{order.shipping_address or '-'}</span></div>
-    </div>
-
-    {tracking_section}
+    {address_section}
+    {next_section}
     """
     html = _base_template(content, seller_name)
     return _send_email(user.email, subject, html)

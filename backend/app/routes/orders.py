@@ -191,7 +191,11 @@ async def create_order(request: Request, db: Session = Depends(get_db)):
 
     if order_snap and user_snap:
         try:
-            _send_email_bg(send_order_pending_email, order_snap, user_snap, seller_name)
+            pickup_info = _get_pickup_info() if delivery_type == "pickup" else None
+            if pickup_info is not None:
+                _send_email_bg(send_order_pending_email, order_snap, user_snap, seller_name, pickup_info)
+            else:
+                _send_email_bg(send_order_pending_email, order_snap, user_snap, seller_name)
         except Exception:
             pass
 
