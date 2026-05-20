@@ -261,6 +261,9 @@ export default function SellerDashboard() {
     pickup_open: "08:00",
     pickup_close: "17:00",
     pickup_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
+    store_address: "",
+    store_phone: "",
+    pickup_notes: "",
   });
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMsg, setBrandingMsg] = useState("");
@@ -415,6 +418,9 @@ export default function SellerDashboard() {
         pickup_open: data.pickup_open_time || "08:00",
         pickup_close: data.pickup_close_time || "17:00",
         pickup_days: data.pickup_days || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
+        store_address: data.store_address || "",
+        store_phone: data.store_phone || "",
+        pickup_notes: data.pickup_notes || "",
       });
     }).catch(() => {});
     loadBanners();
@@ -562,6 +568,9 @@ export default function SellerDashboard() {
           pickup_open_time: brandingForm.pickup_open,
           pickup_close_time: brandingForm.pickup_close,
           pickup_days: brandingForm.pickup_days,
+          store_address: brandingForm.store_address,
+          store_phone: brandingForm.store_phone,
+          pickup_notes: brandingForm.pickup_notes,
         }),
       });
       if (res.ok) {
@@ -1428,6 +1437,39 @@ export default function SellerDashboard() {
                           : <strong>{brandingForm.pickup_open} – {brandingForm.pickup_close}</strong>
                         }
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Alamat Toko</label>
+                      <textarea
+                        rows={2}
+                        value={brandingForm.store_address}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, store_address: e.target.value }))}
+                        placeholder="Contoh: Jl. Raya Furniture No. 12, Kota..."
+                        className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">No. Telepon Toko</label>
+                      <input
+                        type="text"
+                        value={brandingForm.store_phone}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, store_phone: e.target.value }))}
+                        placeholder="Contoh: 0812-3456-7890"
+                        className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Catatan Pengambilan <span className="font-normal text-gray-400">(opsional)</span></label>
+                      <textarea
+                        rows={2}
+                        value={brandingForm.pickup_notes}
+                        onChange={(e) => setBrandingForm((p) => ({ ...p, pickup_notes: e.target.value }))}
+                        placeholder="Contoh: Harap konfirmasi ke WhatsApp sebelum datang."
+                        className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                      />
                     </div>
                   </div>
                 )}

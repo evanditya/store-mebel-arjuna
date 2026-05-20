@@ -49,6 +49,9 @@ async def get_branding():
         "pickup_open_time": config.get("pickup_open_time", "08:00"),
         "pickup_close_time": config.get("pickup_close_time", "17:00"),
         "pickup_days": config.get("pickup_days", ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]),
+        "store_address": config.get("store_address", ""),
+        "store_phone": config.get("store_phone", ""),
+        "pickup_notes": config.get("pickup_notes", ""),
     }
 
 
@@ -83,6 +86,12 @@ async def update_branding(request: Request, db: Session = Depends(get_db)):
         config["pickup_close_time"] = body["pickup_close_time"]
     if "pickup_days" in body:
         config["pickup_days"] = [d for d in body["pickup_days"] if isinstance(d, str)]
+    if "store_address" in body:
+        config["store_address"] = body["store_address"]
+    if "store_phone" in body:
+        config["store_phone"] = body["store_phone"]
+    if "pickup_notes" in body:
+        config["pickup_notes"] = body["pickup_notes"]
     _save_config(config)
     return {"success": True}
 

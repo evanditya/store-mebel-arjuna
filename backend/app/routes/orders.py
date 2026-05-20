@@ -23,6 +23,22 @@ def _get_seller_name() -> str:
         return "Toko Online"
 
 
+def _get_pickup_info() -> dict:
+    try:
+        with open(_SELLER_CONFIG_PATH) as f:
+            d = _json.load(f)
+            return {
+                "store_address": d.get("store_address", ""),
+                "store_phone": d.get("store_phone", ""),
+                "pickup_days": d.get("pickup_days", []),
+                "pickup_open_time": d.get("pickup_open_time", ""),
+                "pickup_close_time": d.get("pickup_close_time", ""),
+                "pickup_notes": d.get("pickup_notes", ""),
+            }
+    except Exception:
+        return {}
+
+
 def _send_email_bg(fn, *args):
     def target():
         try:
@@ -212,6 +228,7 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
 
     # Snapshot BEFORE commit for status-change emails
     order_snap = buyer_snap = snap_seller_name = snap_email_fn = None
+    snap_pickup_info = None
     trigger_statuses = {"completed", "ready_pickup"}
     if status in trigger_statuses and prev_status != status:
         try:
@@ -228,6 +245,7 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
                 elif status == "ready_pickup":
                     from app.email import send_order_ready_pickup_email
                     snap_email_fn = send_order_ready_pickup_email
+                    snap_pickup_info = _get_pickup_info()
         except Exception as _e:
             print(f"[Email] snapshot error ({status}): {_e}")
 
@@ -236,7 +254,10 @@ async def update_order_status(request: Request, db: Session = Depends(get_db)):
 
     if order_snap and buyer_snap and snap_email_fn:
         try:
-            _send_email_bg(snap_email_fn, order_snap, buyer_snap, snap_seller_name)
+            if snap_pickup_info is not None:
+                _send_email_bg(snap_email_fn, order_snap, buyer_snap, snap_seller_name, snap_pickup_info)
+            else:
+                _send_email_bg(snap_email_fn, order_snap, buyer_snap, snap_seller_name)
         except Exception:
             pass
 

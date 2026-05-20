@@ -300,13 +300,50 @@ def send_order_shipped_email(order, user, seller_name: str = "Toko Online") -> b
     return _send_email(user.email, subject, html)
 
 
-def send_order_ready_pickup_email(order, user, seller_name: str = "Toko Online") -> bool:
+def send_order_ready_pickup_email(order, user, seller_name: str = "Toko Online", pickup_info: dict = None) -> bool:
     subject = f"Pesanan #{order.id[:8].upper()} – Siap Diambil di Toko | {seller_name}"
     items_table = _items_table(order.items)
+    pi = pickup_info or {}
+
+    # Build pickup schedule section
+    days = pi.get("pickup_days") or []
+    open_t = pi.get("pickup_open_time", "")
+    close_t = pi.get("pickup_close_time", "")
+    store_address = pi.get("store_address", "")
+    store_phone = pi.get("store_phone", "")
+    pickup_notes = pi.get("pickup_notes", "")
+
+    schedule_rows = ""
+    if days:
+        schedule_rows += f'<div class="info-row"><span class="info-label">Hari Operasional</span><span>{", ".join(days)}</span></div>'
+    if open_t and close_t:
+        schedule_rows += f'<div class="info-row"><span class="info-label">Jam Operasional</span><span><strong>{open_t} – {close_t}</strong></span></div>'
+    elif open_t:
+        schedule_rows += f'<div class="info-row"><span class="info-label">Jam Buka</span><span><strong>{open_t}</strong></span></div>'
+    if store_address:
+        schedule_rows += f'<div class="info-row"><span class="info-label">Alamat Toko</span><span style="text-align:right;max-width:60%">{store_address}</span></div>'
+    if store_phone:
+        schedule_rows += f'<div class="info-row"><span class="info-label">No. Telepon</span><span>{store_phone}</span></div>'
+
+    pickup_section = ""
+    if schedule_rows:
+        pickup_section = f"""
+    <div class="section">
+      <div class="section-title">Informasi Pengambilan</div>
+      {schedule_rows}
+    </div>"""
+
+    notes_box = ""
+    if pickup_notes:
+        notes_box = f"""
+    <div class="note-box" style="background:#fffbeb;border-color:#fde68a;color:#92400e;margin-top:12px">
+      📝 {pickup_notes}
+    </div>"""
+
     content = f"""
     <div class="section">
       <p>Halo <strong>{user.name}</strong>,</p>
-      <p>Pesananmu sudah <strong>siap diambil</strong> di toko kami. Silakan datang ke toko untuk mengambil barangmu ya!</p>
+      <p>Pesananmu sudah <strong>siap diambil</strong> di toko kami. Silakan datang ke toko pada jam operasional untuk mengambil barangmu ya!</p>
       <span class="badge badge-green">Siap Diambil</span>
     </div>
 
@@ -319,9 +356,12 @@ def send_order_ready_pickup_email(order, user, seller_name: str = "Toko Online")
       </div>
     </div>
 
+    {pickup_section}
+
     <div class="note-box" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534">
-      🏪 Tunjukkan kode pesanan ini saat mengambil barang di toko.
+      🏪 Tunjukkan kode pesanan <strong>#{order.id[:8].upper()}</strong> saat mengambil barang di toko.
     </div>
+    {notes_box}
     """
     html = _base_template(content, seller_name)
     return _send_email(user.email, subject, html)

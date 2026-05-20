@@ -34,6 +34,16 @@ interface Order {
   items: Array<{ product_name: string; quantity: number; price: number; variant_name?: string }>;
 }
 
+interface PickupInfo {
+  pickup_enabled: boolean;
+  pickup_open_time: string;
+  pickup_close_time: string;
+  pickup_days: string[];
+  store_address: string;
+  store_phone: string;
+  pickup_notes: string;
+}
+
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
 }
@@ -90,6 +100,7 @@ export default function OrdersPage() {
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [pickupInfo, setPickupInfo] = useState<PickupInfo | null>(null);
 
   const loadOrders = () => {
     return fetch("/api/orders?mine=1").then((r) => r.json()).then((data) => {
@@ -110,6 +121,17 @@ export default function OrdersPage() {
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => { if (!data.user) router.push("/login"); });
     loadOrders();
+    fetch("/api/branding").then((r) => r.json()).then((data) => {
+      setPickupInfo({
+        pickup_enabled: data.pickup_enabled || false,
+        pickup_open_time: data.pickup_open_time || "",
+        pickup_close_time: data.pickup_close_time || "",
+        pickup_days: data.pickup_days || [],
+        store_address: data.store_address || "",
+        store_phone: data.store_phone || "",
+        pickup_notes: data.pickup_notes || "",
+      });
+    }).catch(() => {});
     fetch("/api/payment/client-key").then((r) => r.json()).then((data) => {
       if (data.client_key) {
         setMidtransClientKey(data.client_key);
@@ -238,10 +260,48 @@ export default function OrdersPage() {
                   </div>
 
                   {order.courier_service_name === "Ambil di Toko" && !order.courier_company ? (
+                    order.status === "ready_pickup" ? (
+                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-100 border-b border-emerald-200">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          <span className="text-sm font-semibold text-emerald-800">Pesanan Siap Diambil di Toko!</span>
+                        </div>
+                        <div className="px-3 py-2.5 space-y-1.5 text-sm text-emerald-900">
+                          {pickupInfo?.pickup_days && pickupInfo.pickup_days.length > 0 && (
+                            <div className="flex gap-2">
+                              <span className="text-emerald-600 w-28 flex-shrink-0">Hari</span>
+                              <span>{pickupInfo.pickup_days.join(", ")}</span>
+                            </div>
+                          )}
+                          {pickupInfo?.pickup_open_time && pickupInfo?.pickup_close_time && (
+                            <div className="flex gap-2">
+                              <span className="text-emerald-600 w-28 flex-shrink-0">Jam Buka</span>
+                              <span className="font-medium">{pickupInfo.pickup_open_time} – {pickupInfo.pickup_close_time}</span>
+                            </div>
+                          )}
+                          {pickupInfo?.store_address && (
+                            <div className="flex gap-2">
+                              <span className="text-emerald-600 w-28 flex-shrink-0">Alamat Toko</span>
+                              <span>{pickupInfo.store_address}</span>
+                            </div>
+                          )}
+                          {pickupInfo?.store_phone && (
+                            <div className="flex gap-2">
+                              <span className="text-emerald-600 w-28 flex-shrink-0">Telepon</span>
+                              <a href={`tel:${pickupInfo.store_phone}`} className="font-medium text-emerald-700 underline">{pickupInfo.store_phone}</a>
+                            </div>
+                          )}
+                          {pickupInfo?.pickup_notes && (
+                            <p className="text-xs text-emerald-700 bg-white/60 rounded px-2 py-1.5 mt-1 border border-emerald-100">{pickupInfo.pickup_notes}</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
                     <div className="bg-green-50 rounded-lg p-3 mt-3 flex items-center gap-2">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                       <span className="text-sm font-medium text-green-800">Ambil di Toko — Gratis</span>
                     </div>
+                    )
                   ) : order.courier_company ? (
                     <div className="bg-gray-50 rounded-lg p-3 mt-3">
                       <div className="flex items-center gap-2 text-sm">
