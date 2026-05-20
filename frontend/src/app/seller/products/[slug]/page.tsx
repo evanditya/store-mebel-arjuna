@@ -72,7 +72,7 @@ function rebuildCombinations(groups: VariantGroup[], existing: CombinationRow[])
   return [...kept, ...added];
 }
 
-function parseVariantsToState(apiVariants: ApiVariant[]): { groups: VariantGroup[]; combos: CombinationRow[] } {
+function parseVariantsToState(apiVariants: ApiVariant[], comboVariants: ApiVariant[] = []): { groups: VariantGroup[]; combos: CombinationRow[] } {
   if (!apiVariants.length) return { groups: [], combos: [] };
   const firstType = apiVariants[0].variant_type || "";
   const isMulti = firstType.includes(" / ");
@@ -107,8 +107,14 @@ function parseVariantsToState(apiVariants: ApiVariant[]): { groups: VariantGroup
   const rawCombos = cartesianProduct(groups);
   const combos: CombinationRow[] = rawCombos.map(keys => {
     if (groups.length === 1) {
+      // Single-type: read price/stock directly from the display row
       const v = typeMap.get(groups[0].typeName)?.byName.get(keys[0]);
       if (v) return { comboKeys: keys, price: v.price ?? null, original_price: v.original_price ?? null, stock: v.stock ?? null, is_available: v.is_available !== false };
+    } else if (comboVariants.length > 0) {
+      // Multi-type old format: look up from _combinations rows by "Val1 / Val2" name
+      const name = keys.join(" / ");
+      const cv = comboVariants.find(c => (c.variant_name || "") === name);
+      if (cv) return { comboKeys: keys, price: cv.price ?? null, original_price: cv.original_price ?? null, stock: cv.stock ?? null, is_available: cv.is_available !== false };
     }
     return { comboKeys: keys, price: null, original_price: null, stock: null, is_available: true };
   });
@@ -202,8 +208,10 @@ export default function EditProductPage() {
           setPrimaryImage(data.product.primary_image || "");
           setImages(data.product.images || []);
           setIsAvailable(data.product.is_available !== false);
-          const apiVariants: ApiVariant[] = (data.product.variants || []).filter((v: ApiVariant) => v.variant_type !== "_combinations");
-          const { groups, combos } = parseVariantsToState(apiVariants);
+          const allVariants: ApiVariant[] = data.product.variants || [];
+          const apiVariants: ApiVariant[] = allVariants.filter((v: ApiVariant) => v.variant_type !== "_combinations");
+          const comboVariants: ApiVariant[] = allVariants.filter((v: ApiVariant) => v.variant_type === "_combinations");
+          const { groups, combos } = parseVariantsToState(apiVariants, comboVariants);
           setVariantGroups(groups);
           setCombinations(combos);
           if (data.product.category) {
