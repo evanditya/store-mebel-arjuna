@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Laporan Pengerjaan — Mebel Arjuna Store</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; color: #1e293b; font-size: 14px; line-height: 1.6; }
+    .page { max-width: 860px; margin: 32px auto; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); overflow: hidden; }
+
+    /* Header */
+    .header { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: white; padding: 40px 48px 32px; }
+    .header-badge { display: inline-block; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); border-radius: 20px; padding: 4px 14px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 16px; }
+    .header h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+    .header p { font-size: 13px; color: rgba(255,255,255,.7); }
+    .header-meta { margin-top: 24px; display: flex; gap: 24px; flex-wrap: wrap; }
+    .header-meta span { font-size: 12px; color: rgba(255,255,255,.6); }
+    .header-meta strong { color: white; }
+
+    /* Body */
+    .body { padding: 40px 48px; }
+    section { margin-bottom: 48px; }
+    section:last-child { margin-bottom: 0; }
+
+    h2 { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+    h2 .section-num { background: #0f172a; color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    h3 { font-size: 14px; font-weight: 700; color: #334155; margin: 20px 0 8px; }
+
+    /* Cards */
+    .card { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+    .card-header { background: #f8fafc; padding: 12px 16px; display: flex; align-items: center; gap-10px; gap: 10px; }
+    .card-header .tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
+    .tag-fix { background: #dcfce7; color: #166534; }
+    .tag-feature { background: #dbeafe; color: #1e40af; }
+    .tag-improve { background: #fef9c3; color: #854d0e; }
+    .card-header .title { font-weight: 600; font-size: 14px; color: #0f172a; }
+    .card-body { padding: 14px 16px; background: white; }
+    .card-body ul { padding-left: 18px; }
+    .card-body li { margin-bottom: 6px; color: #475569; }
+    .card-body li strong { color: #0f172a; }
+    .card-body p { color: #475569; margin-bottom: 8px; }
+    .card-body p:last-child { margin-bottom: 0; }
+
+    /* File badges */
+    .files { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .file-badge { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 8px; font-family: 'Courier New', monospace; font-size: 11px; color: #64748b; }
+
+    /* Step guide */
+    .steps { counter-reset: step-counter; }
+    .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+    .step-num { flex-shrink: 0; width: 32px; height: 32px; background: #0f172a; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; margin-top: 2px; }
+    .step-content h4 { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .step-content p { color: #475569; font-size: 13px; }
+    .step-content .note { background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #78350f; }
+    .step-content .code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-family: 'Courier New', monospace; font-size: 12px; color: #0f172a; display: inline-block; margin-top: 4px; }
+
+    /* Info boxes */
+    .info-box { border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; }
+    .info-box.blue { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .info-box.yellow { background: #fefce8; border: 1px solid #fde68a; color: #854d0e; }
+    .info-box.green { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
+    .info-box strong { font-weight: 700; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th { background: #f8fafc; padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #475569; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td strong { color: #0f172a; }
+
+    /* Footer */
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px 48px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .footer p { font-size: 12px; color: #94a3b8; }
+
+    @media print {
+      body { background: white; }
+      .page { box-shadow: none; border-radius: 0; max-width: 100%; margin: 0; }
+    }
+    @media (max-width: 640px) {
+      .header, .body, .footer { padding-left: 24px; padding-right: 24px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">Laporan Pengerjaan</div>
+    <h1>Mebel Arjuna Store — Ringkasan Update</h1>
+    <p>Dokumentasi semua perubahan, perbaikan, dan fitur baru yang telah dikerjakan</p>
+    <div class="header-meta">
+      <span><strong>Proyek:</strong> Indonesian Furniture E-Commerce</span>
+      <span><strong>Stack:</strong> Next.js 14 + FastAPI + PostgreSQL</span>
+      <span><strong>Tanggal:</strong> 21 Mei 2026</span>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ── 1. BUG FIX: Varian ── -->
+    <section>
+      <h2><span class="section-num">1</span> Perbaikan Bug: Varian Tidak Muncul Harga &amp; Stok</h2>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-fix">Bug Fix</span>
+          <span class="title">Harga &amp; stok varian tidak tampil di halaman produk (buyer)</span>
+        </div>
+        <div class="card-body">
+          <p><strong>Masalah:</strong> Ketika produk memiliki varian, harga dan stok yang ditampilkan di halaman detail produk tidak mencerminkan data varian yang dipilih. Tampilan menggunakan harga produk utama, bukan harga varian.</p>
+          <ul>
+            <li>Helper <strong>effective_stock()</strong> di serializers kini menghitung stok dari varian bila varian ada, bukan langsung dari <code>product.stock</code></li>
+            <li>Harga yang tampil di <strong>ProductCard</strong> dan <strong>ProductDetail</strong> kini mengambil dari varian aktif (harga asli vs harga diskon per varian)</li>
+            <li>Logika single-group dan multi-group variant dipisahkan: separator <code> / </code> untuk multi-group, tanpa separator untuk single-group</li>
+            <li><strong>display_order</strong> kolom ditambahkan ke tabel <code>product_variants</code> agar urutan stabil setelah save/reload</li>
+          </ul>
+          <div class="files">
+            <span class="file-badge">backend/app/serializers.py</span>
+            <span class="file-badge">frontend/src/components/ProductCard.tsx</span>
+            <span class="file-badge">frontend/src/components/ProductDetail.tsx</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-fix">Bug Fix</span>
+          <span class="title">Sinkronisasi stok varian → stok produk utama</span>
+        </div>
+        <div class="card-body">
+          <p>Stok produk utama (<code>product.stock</code>) sebelumnya bisa tidak sinkron dengan total stok varian. Sekarang stok utama selalu dihitung ulang otomatis setiap kali varian dibuat, diupdate, atau diimpor via Excel.</p>
+          <div class="files">
+            <span class="file-badge">backend/app/routes/products.py</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 2. Monitor Transaksi & Report ── -->
+    <section>
+      <h2><span class="section-num">2</span> Fitur: Monitor Transaksi &amp; Laporan Harian Email</h2>
+
+      <div class="info-box blue">
+        <strong>Ringkasan:</strong> Sistem laporan harian otomatis yang dikirim ke email setiap pukul 23:00 WIB, dilindungi PIN rahasia, dan dapat diakses melalui halaman tersembunyi <code>/report-harian</code>.
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-feature">Fitur Baru</span>
+          <span class="title">Halaman rahasia /report-harian (dilindungi PIN)</span>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li>Tidak ada link menuju halaman ini dari mana pun — hanya bisa diakses kalau tahu URL-nya</li>
+            <li>PIN gate: masukkan PIN untuk mendapat token sesi (berlaku 1 jam)</li>
+            <li>PIN default: <strong>admin1234</strong> — disarankan segera diganti</li>
+            <li>PIN disimpan sebagai SHA-256 hash di <code>seller_config.json</code> (tidak pernah plaintext)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-feature">Fitur Baru</span>
+          <span class="title">Statistik hari ini secara real-time</span>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li>Total pesanan hari ini (semua status)</li>
+            <li>Total pendapatan terkonfirmasi (dari pesanan berstatus: paid, processing, ready_pickup, shipped, completed)</li>
+            <li>Rincian jumlah pesanan per status</li>
+            <li>Daftar lengkap seluruh pesanan: ID, pembeli, produk, metode pengiriman, total, status</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-feature">Fitur Baru</span>
+          <span class="title">Pengiriman otomatis email laporan (pukul 23:00 WIB)</span>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li>Scheduler berjalan di background, cek setiap menit</li>
+            <li>Kirim otomatis pukul 23:00–23:04 WIB jika fitur diaktifkan dan email penerima sudah diatur</li>
+            <li>Email berisi ringkasan statistik + tabel 30 pesanan terbaru dengan desain HTML profesional</li>
+            <li>Tombol "Kirim Sekarang" untuk tes tanpa menunggu jadwal</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-feature">Fitur Baru</span>
+          <span class="title">Manajemen PIN akses</span>
+        </div>
+        <div class="card-body">
+          <ul>
+            <li>Ganti PIN langsung dari dalam halaman (perlu verifikasi PIN lama)</li>
+            <li>Notifikasi peringatan jika masih menggunakan PIN default</li>
+            <li>Minimal 4 karakter untuk PIN baru</li>
+          </ul>
+          <div class="files">
+            <span class="file-badge">backend/app/daily_report.py</span>
+            <span class="file-badge">backend/app/routes/report.py</span>
+            <span class="file-badge">backend/app/email.py → send_daily_report_email()</span>
+            <span class="file-badge">frontend/src/app/report-harian/page.tsx</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 3. Excel ── -->
+    <section>
+      <h2><span class="section-num">3</span> Peningkatan: Kolom Excel &amp; Keterangan Tidak Wajib</h2>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-improve">Peningkatan</span>
+          <span class="title">Kolom "Keterangan" tidak wajib diisi di checkout</span>
+        </div>
+        <div class="card-body">
+          <p>Sebelumnya field keterangan/catatan di form checkout bisa menyebabkan validasi gagal jika dikosongkan. Sekarang field tersebut bersifat opsional — pembeli tidak wajib mengisinya untuk melanjutkan pemesanan.</p>
+          <div class="files">
+            <span class="file-badge">frontend/src/app/checkout/page.tsx</span>
+            <span class="file-badge">backend/app/routes/orders.py</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-improve">Peningkatan</span>
+          <span class="title">Kolom tersembunyi di template Excel ekspor/impor</span>
+        </div>
+        <div class="card-body">
+          <p>Beberapa kolom teknis yang jarang diedit (seperti ID internal, timestamp, dan metadata sistem) kini disembunyikan secara default di file Excel yang diunduh. Kolom tetap ada di file dan bisa di-unhide jika diperlukan, namun tampilan lebih bersih untuk penggunaan sehari-hari.</p>
+          <ul>
+            <li>Sheet 1 (Produk): kolom ID dan metadata sistem disembunyikan</li>
+            <li>Sheet 2 (Varian): kolom hanya menampilkan yang relevan untuk editing</li>
+            <li>Backward compatible: file lama dengan kolom "Harga" / "Harga Coret" tetap bisa diimpor</li>
+          </ul>
+          <div class="files">
+            <span class="file-badge">backend/app/routes/products.py → excel_export()</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 4. Jadwal Pengambilan ── -->
+    <section>
+      <h2><span class="section-num">4</span> Peningkatan: Jadwal Pengambilan di Email &amp; Tampilan</h2>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-improve">Peningkatan</span>
+          <span class="title">Info toko &amp; jadwal pengambilan muncul di semua email</span>
+        </div>
+        <div class="card-body">
+          <p>Sebelumnya informasi toko (alamat, telepon, jam operasional) hanya muncul di email tertentu. Sekarang ditampilkan secara konsisten di seluruh email:</p>
+          <ul>
+            <li><strong>Email konfirmasi pesanan</strong> (pending) — alamat dan telepon toko</li>
+            <li><strong>Email pembayaran berhasil</strong> (paid) — jadwal pengambilan + alamat toko</li>
+            <li><strong>Email siap diambil</strong> (ready_pickup) — jadwal pengambilan lengkap dengan hari dan jam</li>
+          </ul>
+          <div class="files">
+            <span class="file-badge">backend/app/email.py</span>
+            <span class="file-badge">backend/app/routes/orders.py</span>
+            <span class="file-badge">backend/app/routes/payment.py</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-improve">Peningkatan</span>
+          <span class="title">Tampilan info pickup di halaman pesanan buyer</span>
+        </div>
+        <div class="card-body">
+          <p>Informasi pickup (lokasi toko, jadwal, nomor telepon) kini ditampilkan untuk <strong>semua status</strong> pesanan "Ambil di Toko", bukan hanya saat status "Siap Diambil". Pembeli bisa melihat informasi toko sejak awal pemesanan.</p>
+          <div class="files">
+            <span class="file-badge">frontend/src/app/orders/page.tsx</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-improve">Peningkatan</span>
+          <span class="title">Filter tab pesanan di dashboard seller</span>
+        </div>
+        <div class="card-body">
+          <p>Ditambahkan tab filter di daftar pesanan seller: <strong>Semua / Belum Diproses / Siap Diambil-Dikirim / Selesai / Dibatalkan</strong>. Memudahkan seller fokus ke pesanan yang perlu ditindaklanjuti.</p>
+          <div class="files">
+            <span class="file-badge">frontend/src/app/seller/page.tsx</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 5. Filter Kategori ── -->
+    <section>
+      <h2><span class="section-num">5</span> Fitur Tambahan: Filter Kategori Produk di Seller</h2>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="tag tag-feature">Fitur Baru</span>
+          <span class="title">Filter chip kategori di daftar produk seller</span>
+        </div>
+        <div class="card-body">
+          <p>Di bawah kolom pencarian produk, kini tersedia baris chip kategori untuk memfilter produk berdasarkan kategori:</p>
+          <ul>
+            <li>21 kategori tersedia (dinamis dari database)</li>
+            <li>Klik chip untuk filter; klik lagi untuk kembali ke "Semua"</li>
+            <li>Filter kategori dan pencarian teks bisa dikombinasikan</li>
+            <li>Pagination sadar filter yang aktif</li>
+          </ul>
+          <div class="files">
+            <span class="file-badge">frontend/src/app/seller/page.tsx</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 6. Panduan /report-harian ── -->
+    <section>
+      <h2><span class="section-num">6</span> Panduan Penggunaan: Halaman /report-harian</h2>
+
+      <div class="info-box yellow">
+        <strong>Rahasia:</strong> Halaman <code>/report-harian</code> tidak terhubung dari mana pun di aplikasi. Akses langsung dengan mengetik URL tersebut di browser. Jangan bagikan URL ini ke pihak yang tidak berkepentingan.
+      </div>
+
+      <h3>Langkah Pertama Kali (Setup)</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Buka halaman laporan</h4>
+            <p>Di browser, ketik alamat lengkap halaman ini:</p>
+            <span class="code">https://[domain-anda]/report-harian</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Masukkan PIN default</h4>
+            <p>Akan muncul layar PIN. Masukkan PIN bawaan:</p>
+            <span class="code">admin1234</span>
+            <div class="note">⚠️ Segera ganti PIN ini di langkah selanjutnya agar tidak bisa diakses orang lain.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Ganti PIN (wajib)</h4>
+            <p>Gulir ke bawah ke bagian <strong>"Ganti PIN Akses"</strong>. Isi tiga field:</p>
+            <ul style="margin-top:6px; padding-left:18px; color:#475569; font-size:13px;">
+              <li><strong>PIN Saat Ini:</strong> <code>admin1234</code></li>
+              <li><strong>PIN Baru:</strong> minimal 4 karakter (bisa angka atau huruf)</li>
+              <li><strong>Konfirmasi PIN Baru:</strong> ulangi PIN baru</li>
+            </ul>
+            <p style="margin-top:6px;">Klik <strong>"Ganti PIN"</strong> dan konfirmasi sukses muncul.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Atur email penerima laporan</h4>
+            <p>Di bagian <strong>"Pengaturan Laporan Otomatis"</strong>, masukkan alamat email yang akan menerima laporan harian. Klik <strong>"Simpan Pengaturan"</strong>.</p>
+            <div class="note">📧 Pastikan konfigurasi SMTP sudah aktif (variabel EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD di environment). Tanpa SMTP, email tidak akan terkirim.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Aktifkan pengiriman otomatis</h4>
+            <p>Nyalakan toggle <strong>"Kirim otomatis tiap pukul 23:00 WIB"</strong>, lalu klik <strong>"Simpan Pengaturan"</strong>. Mulai malam itu, laporan akan dikirim otomatis setiap hari pukul 23:00 WIB.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:28px;">Penggunaan Sehari-hari</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Buka halaman &amp; login dengan PIN</h4>
+            <p>Setiap sesi browser baru memerlukan PIN. Token sesi aktif selama 1 jam.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Lihat statistik hari ini</h4>
+            <p>Bagian atas menampilkan: total pesanan hari ini, total pendapatan dari pesanan berbayar, rincian per status, dan daftar seluruh pesanan.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Kirim laporan manual (opsional)</h4>
+            <p>Untuk kirim laporan sekarang tanpa menunggu jadwal, klik tombol <strong>"Kirim Sekarang"</strong> di bagian "Kirim Laporan Sekarang". Email akan terkirim ke alamat yang sudah dikonfigurasi.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Refresh data</h4>
+            <p>Klik tombol <strong>"Refresh"</strong> di pojok kanan atas kartu statistik untuk memperbarui data tanpa reload halaman.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:28px;">Isi Laporan Email</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Bagian</th>
+            <th>Isi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Header</strong></td><td>Nama toko, tanggal lengkap dalam bahasa Indonesia</td></tr>
+          <tr><td><strong>Kartu Statistik</strong></td><td>Total pesanan (semua status) + total pendapatan terkonfirmasi</td></tr>
+          <tr><td><strong>Rincian Status</strong></td><td>Jumlah pesanan per status dengan warna masing-masing</td></tr>
+          <tr><td><strong>Tabel Pesanan</strong></td><td>Maks. 30 pesanan terbaru: ID, pembeli, produk, metode pengiriman, total, status</td></tr>
+          <tr><td><strong>Catatan</strong></td><td>Timestamp pengiriman otomatis</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box green" style="margin-top:20px;">
+        <strong>Tip:</strong> Laporan otomatis dikirim pukul 23:00–23:04 WIB. Jika aplikasi tidak berjalan di jam tersebut (misalnya server restart), laporan tidak akan terkirim malam itu. Gunakan tombol "Kirim Sekarang" sebagai backup manual.
+      </div>
+    </section>
+
+    <!-- ── Ringkasan File ── -->
+    <section>
+      <h2><span class="section-num">7</span> Ringkasan File yang Diubah</h2>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Perubahan</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>backend/app/daily_report.py</strong></td><td>Baru — statistik harian, scheduler 23:00 WIB, manajemen token PIN</td></tr>
+          <tr><td><strong>backend/app/routes/report.py</strong></td><td>Baru — API endpoint: verify-pin, config, stats, send-now</td></tr>
+          <tr><td><strong>backend/app/email.py</strong></td><td>Tambah fungsi send_daily_report_email() + info toko di email pesanan</td></tr>
+          <tr><td><strong>backend/app/main.py</strong></td><td>Daftarkan report router + start daily_report scheduler saat startup</td></tr>
+          <tr><td><strong>backend/app/routes/orders.py</strong></td><td>Tambah info toko di email konfirmasi pesanan</td></tr>
+          <tr><td><strong>backend/app/routes/payment.py</strong></td><td>Tambah info toko di email konfirmasi pembayaran</td></tr>
+          <tr><td><strong>backend/app/routes/branding.py</strong></td><td>Fallback ke DB user.phone/address jika seller_config kosong</td></tr>
+          <tr><td><strong>backend/app/routes/auth.py</strong></td><td>Sinkronisasi phone/address seller ke seller_config.json saat update profil</td></tr>
+          <tr><td><strong>frontend/src/app/report-harian/page.tsx</strong></td><td>Baru — halaman PIN-protected: stats, config, send-now, ganti PIN</td></tr>
+          <tr><td><strong>frontend/src/app/seller/page.tsx</strong></td><td>Tab filter pesanan + filter chip kategori produk</td></tr>
+          <tr><td><strong>frontend/src/app/orders/page.tsx</strong></td><td>Info pickup muncul di semua status (bukan hanya ready_pickup)</td></tr>
+          <tr><td><strong>frontend/src/components/ProductCard.tsx</strong></td><td>Harga dari varian aktif</td></tr>
+          <tr><td><strong>frontend/src/components/ProductDetail.tsx</strong></td><td>Stok &amp; harga dari varian, deteksi multi-group variant</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div><!-- /body -->
+
+  <div class="footer">
+    <p>Mebel Arjuna Store — Laporan Pengerjaan Internal</p>
+    <p>Dibuat otomatis · 21 Mei 2026</p>
+  </div>
+
+</div>
+</body>
+</html>
