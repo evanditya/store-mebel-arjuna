@@ -163,6 +163,8 @@ export default function SellerDashboard() {
   const [productTotal, setProductTotal] = useState(0);
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
+  const [productCategory, setProductCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [tab, setTab] = useState<"products" | "orders" | "settings" | "admins">("products");
@@ -290,10 +292,12 @@ export default function SellerDashboard() {
     document.head.appendChild(link);
   }, [brandingForm.font]);
 
-  const loadProducts = async (page: number, search: string) => {
+  const loadProducts = async (page: number, search: string, category?: string) => {
     setProductLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: "20", include_inactive: "true" });
     if (search.trim()) params.set("search", search.trim());
+    const cat = category !== undefined ? category : productCategory;
+    if (cat) params.set("category", cat);
     const res = await fetch(`/api/products?${params}`);
     const data = await res.json();
     setProducts(data.products || []);
@@ -373,7 +377,7 @@ export default function SellerDashboard() {
     if (!productMounted.current) { productMounted.current = true; return; }
     const searchTimer = setTimeout(() => { loadProducts(1, productSearch); }, 350);
     return () => clearTimeout(searchTimer);
-  }, [productSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [productSearch, productCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((data) => {
@@ -388,6 +392,7 @@ export default function SellerDashboard() {
         fetch("/api/admin/users").then((r) => r.json()).then((d) => { if (d.admins) setAdminUsers(d.admins); }).catch(() => {});
       }
     });
+    fetch("/api/categories").then((r) => r.json()).then((d) => { if (d.categories) setCategories(d.categories); }).catch(() => {});
     Promise.all([loadProducts(1, ""), fetch("/api/orders").then((r) => r.json())]).then(([, orderData]: [void, { orders?: Order[] }]) => {
       const list = orderData?.orders || [];
       setOrders(list);
@@ -878,7 +883,7 @@ export default function SellerDashboard() {
               </div>
             )}
 
-            <div className="mb-3">
+            <div className="mb-3 space-y-2">
               <input
                 type="text"
                 value={productSearch}
@@ -886,6 +891,25 @@ export default function SellerDashboard() {
                 placeholder={`Cari dari ${productTotal} produk...`}
                 className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
               />
+              {categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => { setProductCategory(""); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${productCategory === "" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}
+                  >
+                    Semua
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => { setProductCategory(productCategory === cat ? "" : cat); }}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition ${productCategory === cat ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {productLoading ? (
@@ -958,7 +982,11 @@ export default function SellerDashboard() {
                     );
                   })}
                   {products.length === 0 && (
-                    <div className="text-center py-12 text-gray-400">{productSearch ? `Tidak ada produk yang cocok dengan "${productSearch}"` : "Belum ada produk"}</div>
+                    <div className="text-center py-12 text-gray-400">
+                      {productSearch || productCategory
+                        ? `Tidak ada produk${productCategory ? ` di kategori "${productCategory}"` : ""}${productSearch ? ` yang cocok dengan "${productSearch}"` : ""}`
+                        : "Belum ada produk"}
+                    </div>
                   )}
                 </div>
 
@@ -969,14 +997,14 @@ export default function SellerDashboard() {
                     </p>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => loadProducts(productPage - 1, productSearch)}
+                        onClick={() => loadProducts(productPage - 1, productSearch, productCategory)}
                         disabled={productPage <= 1}
                         className="px-3 py-1.5 rounded-lg border text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
                       >
                         ← Sebelumnya
                       </button>
                       <button
-                        onClick={() => loadProducts(productPage + 1, productSearch)}
+                        onClick={() => loadProducts(productPage + 1, productSearch, productCategory)}
                         disabled={productPage >= productTotalPages}
                         className="px-3 py-1.5 rounded-lg border text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
                       >
