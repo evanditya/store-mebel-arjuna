@@ -164,6 +164,7 @@ export default function SellerDashboard() {
   const [productTotalPages, setProductTotalPages] = useState(1);
   const [productLoading, setProductLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [orderFilter, setOrderFilter] = useState<string>("all");
   const [tab, setTab] = useState<"products" | "orders" | "settings" | "admins">("products");
   const [settingsOpen, setSettingsOpen] = useState<Set<string>>(new Set(["tampilan"]));
   const [loading, setLoading] = useState(true);
@@ -677,6 +678,18 @@ export default function SellerDashboard() {
 
   const totalRevenue = orders.filter((o) => o.status === "paid" || o.status === "completed" || o.status === "shipped").reduce((s, o) => s + o.total, 0);
 
+  const orderFilterTabs: { key: string; label: string; statuses: string[] | null }[] = [
+    { key: "all", label: "Semua", statuses: null },
+    { key: "new", label: "Belum Diproses", statuses: ["pending", "paid", "processing"] },
+    { key: "action", label: "Siap Diambil / Dikirim", statuses: ["ready_pickup", "shipped"] },
+    { key: "done", label: "Selesai", statuses: ["completed"] },
+    { key: "cancelled", label: "Dibatalkan", statuses: ["cancelled"] },
+  ];
+  const filteredOrders = orderFilter === "all" ? orders : orders.filter((o) => {
+    const ft = orderFilterTabs.find((t) => t.key === orderFilter);
+    return ft?.statuses?.includes(o.status) ?? true;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-50">
@@ -977,8 +990,29 @@ export default function SellerDashboard() {
           </div>
         )}
         {tab === "orders" && (
-          <div className="space-y-2">
-            {orders.map((order) => (
+          <div className="space-y-3">
+            {/* Filter tabs */}
+            <div className="flex gap-1.5 flex-wrap">
+              {orderFilterTabs.map((ft) => {
+                const count = ft.statuses === null ? orders.length : orders.filter((o) => ft.statuses!.includes(o.status)).length;
+                const active = orderFilter === ft.key;
+                return (
+                  <button
+                    key={ft.key}
+                    onClick={() => setOrderFilter(ft.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${active ? "bg-gray-900 text-white" : "bg-white border text-gray-600 hover:border-gray-400"}`}
+                  >
+                    {ft.label}
+                    {count > 0 && (
+                      <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 ${active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+            {filteredOrders.map((order) => (
               <div key={order.id} className="bg-white rounded-lg border p-4" data-testid={`order-row-${order.id}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1093,7 +1127,12 @@ export default function SellerDashboard() {
                 )}
               </div>
             ))}
-            {orders.length === 0 && <div className="text-center py-12 text-gray-400">Belum ada pesanan</div>}
+            {filteredOrders.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                {orderFilter === "all" ? "Belum ada pesanan" : "Tidak ada pesanan di kategori ini"}
+              </div>
+            )}
+            </div>
           </div>
         )}
         {tab === "settings" && (
