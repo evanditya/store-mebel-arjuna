@@ -12,3 +12,9 @@ id = "8TNWHjkjJyCFWPBTVhtYq"
 uri = "file://mebel-store-template.zip"
 type = "unspecified"
 title = "Marketplace Template (from Shopee Scraper)"
+
+[[outputs]]
+id = "9Bv2bA8vYLuj1A1sBpTCM"
+uri = "file://marketplace-template.zip"
+type = "unspecified"
+title = "Marketplace Store Template — Source Code"
