@@ -438,3 +438,100 @@ def send_order_completed_email(order, user, seller_name: str = "Toko Online") ->
     return _send_email(user.email, subject, html)
 
 
+def send_daily_report_email(to_email: str, stats: dict, seller_name: str = "Toko Online") -> bool:
+    from datetime import date as _date
+    d = stats.get("date", "")
+    try:
+        dt = _date.fromisoformat(d)
+        days_id = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
+        months_id = ["","Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"]
+        date_str = f"{days_id[dt.weekday()]}, {dt.day} {months_id[dt.month]} {dt.year}"
+    except Exception:
+        date_str = d
+
+    subject = f"Laporan Harian {seller_name} — {date_str}"
+
+    status_labels = {
+        "pending": "Menunggu Bayar", "paid": "Dibayar", "processing": "Diproses",
+        "ready_pickup": "Siap Diambil", "shipped": "Dikirim",
+        "completed": "Selesai", "cancelled": "Dibatalkan",
+    }
+    status_colors = {
+        "pending": "#f59e0b", "paid": "#3b82f6", "processing": "#8b5cf6",
+        "ready_pickup": "#10b981", "shipped": "#06b6d4",
+        "completed": "#6b7280", "cancelled": "#ef4444",
+    }
+
+    status_rows = ""
+    for st, cnt in sorted(stats.get("status_counts", {}).items(), key=lambda x: -x[1]):
+        color = status_colors.get(st, "#6b7280")
+        label = status_labels.get(st, st)
+        status_rows += f'<div class="info-row"><span class="info-label" style="color:{color};font-weight:600">{label}</span><span>{cnt} pesanan</span></div>'
+
+    order_rows = ""
+    for o in stats.get("orders", [])[:30]:
+        items_str = ", ".join(f"{it['name']} x{it['qty']}" for it in o["items"])
+        st_label = status_labels.get(o["status"], o["status"])
+        st_color = status_colors.get(o["status"], "#6b7280")
+        order_rows += f"""
+        <tr>
+          <td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#6b7280;border-bottom:1px solid #f3f4f6">#{o['id']}</td>
+          <td style="padding:8px 10px;font-size:13px;border-bottom:1px solid #f3f4f6">{o['buyer']}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#4b5563;border-bottom:1px solid #f3f4f6">{items_str}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#4b5563;border-bottom:1px solid #f3f4f6">{o['delivery']}</td>
+          <td style="padding:8px 10px;font-size:13px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6">{_format_idr(o['total'])}</td>
+          <td style="padding:8px 10px;text-align:center;border-bottom:1px solid #f3f4f6"><span style="background:{st_color}22;color:{st_color};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">{st_label}</span></td>
+        </tr>"""
+
+    orders_table = f"""
+    <table style="width:100%;border-collapse:collapse;font-family:sans-serif;margin-top:4px">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">ID</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">Pembeli</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">Produk</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">Pengiriman</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">Total</th>
+          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#9ca3af;font-weight:600;border-bottom:1px solid #e5e7eb">Status</th>
+        </tr>
+      </thead>
+      <tbody>{order_rows}</tbody>
+    </table>""" if order_rows else '<p style="color:#9ca3af;font-size:13px">Tidak ada pesanan hari ini.</p>'
+
+    content = f"""
+    <div class="section">
+      <p style="font-size:12px;color:#9ca3af;margin:0 0 6px;text-transform:uppercase;letter-spacing:0.05em">Laporan Otomatis</p>
+      <h2 style="margin:0 0 4px;font-size:20px;color:#111827">{seller_name}</h2>
+      <p style="font-size:15px;color:#374151;margin:0">{date_str}</p>
+    </div>
+
+    <div style="display:flex;gap:12px;margin:0 0 8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px">
+        <p style="margin:0 0 4px;font-size:11px;color:#16a34a;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Total Pesanan</p>
+        <p style="margin:0;font-size:32px;font-weight:800;color:#15803d">{stats.get('total_orders', 0)}</p>
+      </div>
+      <div style="flex:1;min-width:140px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px">
+        <p style="margin:0 0 4px;font-size:11px;color:#2563eb;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Pendapatan Terkonfirmasi</p>
+        <p style="margin:0;font-size:22px;font-weight:800;color:#1d4ed8">{_format_idr(stats.get('total_revenue', 0))}</p>
+        <p style="margin:2px 0 0;font-size:10px;color:#60a5fa">Dari pesanan berbayar/dikirim/selesai</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Rincian per Status</div>
+      {status_rows if status_rows else '<p style="color:#9ca3af;font-size:13px">Tidak ada data.</p>'}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Daftar Pesanan{' (30 terbaru)' if len(stats.get('orders', [])) > 30 else ''}</div>
+      {orders_table}
+    </div>
+
+    <div class="note-box" style="background:#fafafa;border-color:#e5e7eb;color:#9ca3af;font-size:11px;margin-top:8px">
+      📧 Email ini dikirim otomatis setiap hari pukul 23:00 WIB oleh sistem {seller_name}.
+    </div>
+    """
+    html = _base_template(content, seller_name)
+    return _send_email(to_email, subject, html)
+
+

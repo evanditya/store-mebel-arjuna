@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import engine, Base
-from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners, admins, shopee_sync as shopee_sync_routes, excel_import as excel_import_routes
+from app.routes import auth, products, cart, orders, payment, upload, shipping, branding, banners, admins, shopee_sync as shopee_sync_routes, excel_import as excel_import_routes, report as report_routes
 from app import shopee_sync as shopee_sync_svc
+from app import daily_report as daily_report_svc
 import os
 
 
@@ -40,9 +41,17 @@ async def lifespan(app: FastAPI):
         shopee_sync_svc.start_daemon()
     except Exception as e:
         print(f"[ShopeeSync] failed to start daemon: {e}")
+    try:
+        daily_report_svc.start_scheduler()
+    except Exception as e:
+        print(f"[DailyReport] failed to start scheduler: {e}")
     yield
     try:
         shopee_sync_svc.stop_daemon()
+    except Exception:
+        pass
+    try:
+        daily_report_svc.stop_scheduler()
     except Exception:
         pass
 
@@ -84,6 +93,7 @@ app.include_router(banners.router)
 app.include_router(admins.router)
 app.include_router(shopee_sync_routes.router)
 app.include_router(excel_import_routes.router)
+app.include_router(report_routes.router)
 
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
