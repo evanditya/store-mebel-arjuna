@@ -242,7 +242,8 @@ export default function OrdersPage() {
               const st = statusLabels[order.status] || statusLabels.pending;
               const isPending = order.status === "pending";
               const isPaying = payingOrderId === order.id;
-              const hasShipping = order.status === "shipped" || order.status === "completed" || !!order.waybill_id;
+              const isPickup = order.courier_service_name === "Ambil di Toko" && !order.courier_company;
+              const hasShipping = !isPickup && (order.status === "shipped" || order.status === "completed" || !!order.waybill_id);
               const isTrackingOpen = trackingOrderId === order.id;
               return (
                 <div key={order.id} className="bg-white rounded-lg border p-4" data-testid={`order-${order.id}`}>
