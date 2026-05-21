@@ -678,16 +678,16 @@ export default function SellerDashboard() {
 
   const totalRevenue = orders.filter((o) => o.status === "paid" || o.status === "completed" || o.status === "shipped").reduce((s, o) => s + o.total, 0);
 
-  const orderFilterTabs: { key: string; label: string; statuses: string[] | null }[] = [
-    { key: "all", label: "Semua", statuses: null },
-    { key: "new", label: "Belum Diproses", statuses: ["pending", "paid", "processing"] },
-    { key: "action", label: "Siap Diambil / Dikirim", statuses: ["ready_pickup", "shipped"] },
-    { key: "done", label: "Selesai", statuses: ["completed"] },
-    { key: "cancelled", label: "Dibatalkan", statuses: ["cancelled"] },
+  const orderFilterTabs = [
+    { key: "all", label: "Semua", statuses: null as string[] | null },
+    { key: "new", label: "Belum Diproses", statuses: ["pending", "paid", "processing"] as string[] },
+    { key: "action", label: "Siap Diambil / Dikirim", statuses: ["ready_pickup", "shipped"] as string[] },
+    { key: "done", label: "Selesai", statuses: ["completed"] as string[] },
+    { key: "cancelled", label: "Dibatalkan", statuses: ["cancelled"] as string[] },
   ];
   const filteredOrders = orderFilter === "all" ? orders : orders.filter((o) => {
     const ft = orderFilterTabs.find((t) => t.key === orderFilter);
-    return ft?.statuses?.includes(o.status) ?? true;
+    return ft && ft.statuses ? ft.statuses.includes(o.status) : true;
   });
 
   return (
