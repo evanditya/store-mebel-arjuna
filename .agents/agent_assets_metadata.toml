@@ -18,3 +18,9 @@ id = "9Bv2bA8vYLuj1A1sBpTCM"
 uri = "file://marketplace-template.zip"
 type = "unspecified"
 title = "Marketplace Store Template — Source Code"
+
+[[outputs]]
+id = "uV9i2roRWD7k3E60Qivp-"
+uri = "file://client-requirements.md"
+type = "text"
+title = "Client Requirements Checklist — Online Store Setup"
