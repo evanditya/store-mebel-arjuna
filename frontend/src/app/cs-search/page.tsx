@@ -344,7 +344,7 @@ export default function CsSearch() {
       setSearched(true);
       try {
         const res = await fetch(
-          `/api/products?search=${encodeURIComponent(query.trim())}&limit=20&include_inactive=true`
+          `/api/products?search=${encodeURIComponent(query.trim())}&limit=20`
         );
         const data = await res.json();
         setResults(data.products || []);
