@@ -189,6 +189,7 @@ function ProductCard({ product }: { product: Product }) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const hasFetched = useRef(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const fetchDetail = useCallback(async () => {
     if (hasFetched.current) return;
@@ -204,8 +205,20 @@ function ProductCard({ product }: { product: Product }) {
   }, [product.slug]);
 
   useEffect(() => {
-    // Auto-fetch variant detail as soon as card mounts
-    fetchDetail();
+    // Only fetch when the card is visible — prevents 20 simultaneous requests on mount
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchDetail();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [fetchDetail]);
 
   const p = detail ?? product;
@@ -224,7 +237,7 @@ function ProductCard({ product }: { product: Product }) {
     : !p.is_available;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-all">
+    <div ref={cardRef} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-all">
       <div className="p-4">
         {/* Top row */}
         <div className="flex gap-3">
