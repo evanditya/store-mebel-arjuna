@@ -218,6 +218,11 @@ function ProductCard({ product }: { product: Product }) {
     p.original_price && p.original_price < p.price ? p.original_price : p.price;
   const hasDiscount = p.original_price && p.original_price < p.price;
 
+  // Product is truly inactive only if it has no active variants (or no variants at all and is_available=false)
+  const isInactive = hasVariants
+    ? variants.every((v) => !v.is_available)
+    : !p.is_available;
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-all">
       <div className="p-4">
@@ -242,7 +247,7 @@ function ProductCard({ product }: { product: Product }) {
               <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
                 {p.name}
               </h3>
-              {!p.is_available && (
+              {isInactive && (
                 <span className="flex-shrink-0 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-medium">
                   Nonaktif
                 </span>
