@@ -187,7 +187,7 @@ function VariantTable({ variants }: { variants: Variant[] }) {
 function ProductCard({ product }: { product: Product }) {
   const [detail, setDetail] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const hasFetched = useRef(false);
 
   const fetchDetail = useCallback(async () => {
@@ -312,7 +312,7 @@ function ProductCard({ product }: { product: Product }) {
           </div>
         )}
 
-        {!loading && hasVariants && (expanded || variants.length <= 4) && (
+        {!loading && hasVariants && expanded && (
           <VariantTable variants={variants} />
         )}
       </div>
