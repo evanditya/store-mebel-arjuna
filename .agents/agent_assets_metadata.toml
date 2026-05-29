@@ -24,3 +24,9 @@ id = "uV9i2roRWD7k3E60Qivp-"
 uri = "file://client-requirements.md"
 type = "text"
 title = "Client Requirements Checklist — Online Store Setup"
+
+[[outputs]]
+id = "QjiyLASu4on2PkR12UnhD"
+uri = "file://marketplace-template-v2.zip"
+type = "unspecified"
+title = "Marketplace Template — Full Source (v2, latest)"
