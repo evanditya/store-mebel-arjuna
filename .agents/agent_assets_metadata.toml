@@ -30,3 +30,9 @@ id = "QjiyLASu4on2PkR12UnhD"
 uri = "file://marketplace-template-v2.zip"
 type = "unspecified"
 title = "Marketplace Template — Full Source (v2, latest)"
+
+[[outputs]]
+id = "0qRA8qmbMnzizs11yKHex"
+uri = "file://technical-spec-deployment.md"
+type = "text"
+title = "Technical Spec — Self-Hosted Server Deployment"
