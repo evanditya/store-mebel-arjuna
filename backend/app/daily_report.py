@@ -139,12 +139,19 @@ def _scheduler_loop(db_factory):
                 if config.get("report_enabled") and config.get("report_email"):
                     db = db_factory()
                     try:
-                        ok = send_daily_report(db, config["report_email"])
-                        if ok:
+                        stats = get_daily_stats(db, today)
+                        if stats["total_orders"] == 0:
                             last_sent_date = today
-                            print(f"[DailyReport] Sent for {today} → {config['report_email']}")
+                            print(f"[DailyReport] No orders for {today} — skipping email")
                         else:
-                            print(f"[DailyReport] Failed to send for {today}")
+                            from app.email import send_daily_report_email
+                            seller_name = config.get("site_name") or config.get("seller_name", "Toko Online")
+                            ok = send_daily_report_email(config["report_email"], stats, seller_name)
+                            if ok:
+                                last_sent_date = today
+                                print(f"[DailyReport] Sent for {today} ({stats['total_orders']} orders) → {config['report_email']}")
+                            else:
+                                print(f"[DailyReport] Failed to send for {today}")
                     finally:
                         db.close()
         except Exception as e:
