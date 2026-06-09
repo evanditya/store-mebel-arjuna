@@ -127,33 +127,58 @@ def send_daily_report(db, to_email: str, target_date: date | None = None) -> boo
 
 
 # ── Scheduler ─────────────────────────────────────────────────────
+def _get_last_sent_date() -> date | None:
+    """Read last sent date from seller_config.json (persists across restarts)."""
+    try:
+        config = _load_config()
+        raw = config.get("report_last_sent_date")
+        if raw:
+            return date.fromisoformat(raw)
+    except Exception:
+        pass
+    return None
+
+
+def _set_last_sent_date(d: date):
+    """Persist last sent date to seller_config.json."""
+    try:
+        config = _load_config()
+        config["report_last_sent_date"] = d.isoformat()
+        _save_config(config)
+    except Exception as e:
+        print(f"[DailyReport] Could not persist last_sent_date: {e}")
+
+
 def _scheduler_loop(db_factory):
-    last_sent_date = None
     print("[DailyReport] Scheduler running (checks every 60s)")
     while not _scheduler_stop.is_set():
         try:
             now_wib = datetime.now(WIB)
             today = now_wib.date()
-            if now_wib.hour == 23 and now_wib.minute < 5 and last_sent_date != today:
+            # Fire any time from 23:00 onwards — survives server sleep/restart
+            if now_wib.hour >= 23 and _get_last_sent_date() != today:
                 config = _load_config()
                 if config.get("report_enabled") and config.get("report_email"):
                     db = db_factory()
                     try:
                         stats = get_daily_stats(db, today)
                         if stats["total_orders"] == 0:
-                            last_sent_date = today
+                            _set_last_sent_date(today)
                             print(f"[DailyReport] No orders for {today} — skipping email")
                         else:
                             from app.email import send_daily_report_email
                             seller_name = config.get("site_name") or config.get("seller_name", "Toko Online")
                             ok = send_daily_report_email(config["report_email"], stats, seller_name)
                             if ok:
-                                last_sent_date = today
+                                _set_last_sent_date(today)
                                 print(f"[DailyReport] Sent for {today} ({stats['total_orders']} orders) → {config['report_email']}")
                             else:
                                 print(f"[DailyReport] Failed to send for {today}")
                     finally:
                         db.close()
+                else:
+                    # Not configured — mark today so we don't keep checking
+                    _set_last_sent_date(today)
         except Exception as e:
             print(f"[DailyReport] Scheduler error: {e}")
         _scheduler_stop.wait(60)
