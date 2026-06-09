@@ -16,6 +16,17 @@ _scheduler_stop = threading.Event()
 
 
 # ── Config helpers ────────────────────────────────────────────────
+def _get_emails(config: dict) -> list:
+    """Return list of recipient emails (supports new list field and old single string)."""
+    raw = config.get("report_emails")
+    if isinstance(raw, list):
+        return [e.strip() for e in raw if str(e).strip()]
+    old = config.get("report_email", "")
+    if old:
+        return [e.strip() for e in old.split(",") if e.strip()]
+    return []
+
+
 def _load_config() -> dict:
     try:
         if os.path.exists(SELLER_CONFIG_PATH):
@@ -158,22 +169,28 @@ def _scheduler_loop(db_factory):
             # Fire any time from 23:00 onwards — survives server sleep/restart
             if now_wib.hour >= 23 and _get_last_sent_date() != today:
                 config = _load_config()
-                if config.get("report_enabled") and config.get("report_email"):
+                emails = _get_emails(config)
+                if config.get("report_enabled") and emails:
                     db = db_factory()
                     try:
                         stats = get_daily_stats(db, today)
-                        if stats["total_orders"] == 0:
+                        only_if_orders = config.get("report_only_if_orders", True)
+                        if only_if_orders and stats["total_orders"] == 0:
                             _set_last_sent_date(today)
                             print(f"[DailyReport] No orders for {today} — skipping email")
                         else:
                             from app.email import send_daily_report_email
                             seller_name = config.get("site_name") or config.get("seller_name", "Toko Online")
-                            ok = send_daily_report_email(config["report_email"], stats, seller_name)
-                            if ok:
+                            any_ok = False
+                            for email in emails:
+                                ok = send_daily_report_email(email, stats, seller_name)
+                                if ok:
+                                    any_ok = True
+                                    print(f"[DailyReport] Sent for {today} ({stats['total_orders']} orders) → {email}")
+                                else:
+                                    print(f"[DailyReport] Failed to send to {email} for {today}")
+                            if any_ok:
                                 _set_last_sent_date(today)
-                                print(f"[DailyReport] Sent for {today} ({stats['total_orders']} orders) → {config['report_email']}")
-                            else:
-                                print(f"[DailyReport] Failed to send for {today}")
                     finally:
                         db.close()
                 else:

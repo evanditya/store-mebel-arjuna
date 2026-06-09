@@ -41,17 +41,18 @@ interface Stats {
 }
 
 interface Config {
+  report_emails: string[];
   report_email: string;
   report_enabled: boolean;
+  report_only_if_orders: boolean;
   pin_is_default: boolean;
 }
 
 const SESSION_KEY = "report_token";
 
 export default function ReportHarian() {
-  const [token, setToken] = useState<string>(() =>
-    typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) || "" : ""
-  );
+  const [token, setToken] = useState<string>("");
+  const [hydrated, setHydrated] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinLoading, setPinLoading] = useState(false);
@@ -60,8 +61,11 @@ export default function ReportHarian() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loadingData, setLoadingData] = useState(false);
 
-  const [emailInput, setEmailInput] = useState("");
+  const [emailList, setEmailList] = useState<string[]>([]);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [enabledInput, setEnabledInput] = useState(false);
+  const [onlyIfOrders, setOnlyIfOrders] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
@@ -96,8 +100,9 @@ export default function ReportHarian() {
         const cfg: Config = await cfgRes.json();
         const st: Stats = await statsRes.json();
         setConfig(cfg);
-        setEmailInput(cfg.report_email);
+        setEmailList(cfg.report_emails ?? (cfg.report_email ? cfg.report_email.split(",").map((e) => e.trim()).filter(Boolean) : []));
         setEnabledInput(cfg.report_enabled);
+        setOnlyIfOrders(cfg.report_only_if_orders ?? true);
         setStats(st);
       } finally {
         setLoadingData(false);
@@ -106,9 +111,16 @@ export default function ReportHarian() {
     []
   );
 
+  // Load token from sessionStorage after mount (avoids SSR hydration mismatch)
   useEffect(() => {
-    if (token) loadData(token);
-  }, [token, loadData]);
+    const saved = sessionStorage.getItem(SESSION_KEY) || "";
+    setToken(saved);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated && token) loadData(token);
+  }, [hydrated, token, loadData]);
 
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +146,22 @@ export default function ReportHarian() {
     }
   };
 
+  const addEmail = () => {
+    const e = emailDraft.trim().toLowerCase();
+    if (!e) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { setEmailError("Format email tidak valid"); return; }
+    if (emailList.includes(e)) { setEmailError("Email sudah ada"); return; }
+    setEmailList((prev) => [...prev, e]);
+    setEmailDraft("");
+    setEmailError("");
+  };
+
+  const removeEmail = (email: string) => setEmailList((prev) => prev.filter((e) => e !== email));
+
+  const handleEmailKeyDown = (ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (ev.key === "Enter" || ev.key === ",") { ev.preventDefault(); addEmail(); }
+  };
+
   const handleSaveConfig = async () => {
     setSaving(true);
     setSaveMsg("");
@@ -141,12 +169,12 @@ export default function ReportHarian() {
       const res = await fetch("/api/report/config", {
         method: "PUT",
         headers: headers(),
-        body: JSON.stringify({ report_email: emailInput, report_enabled: enabledInput }),
+        body: JSON.stringify({ report_emails: emailList, report_enabled: enabledInput, report_only_if_orders: onlyIfOrders }),
       });
       const d = await res.json();
       if (d.success) {
         setSaveMsg("Pengaturan tersimpan.");
-        setConfig((c) => c ? { ...c, report_email: emailInput, report_enabled: enabledInput } : c);
+        setConfig((c) => c ? { ...c, report_emails: emailList, report_enabled: enabledInput, report_only_if_orders: onlyIfOrders } : c);
       } else {
         setSaveMsg(d.error || "Gagal menyimpan.");
       }
@@ -203,6 +231,10 @@ export default function ReportHarian() {
   };
 
   // PIN gate
+  if (!hydrated) {
+    return <div className="min-h-screen bg-gray-100" />;
+  }
+
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
@@ -354,15 +386,18 @@ export default function ReportHarian() {
             {/* Send now */}
             <div className="bg-white rounded-xl border p-5">
               <h2 className="font-semibold text-sm text-gray-700 mb-3">Kirim Laporan Sekarang</h2>
-              {config.report_email ? (
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-gray-500 flex-1">
-                    Kirim ke <span className="font-medium text-gray-700">{config.report_email}</span>
+              {emailList.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-500">
+                    Kirim ke:{" "}
+                    {emailList.map((e) => (
+                      <span key={e} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded-full mr-1 font-medium">{e}</span>
+                    ))}
                   </p>
                   <button
                     onClick={handleSendNow}
                     disabled={sending}
-                    className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition disabled:opacity-50 shrink-0"
+                    className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
                   >
                     {sending ? "Mengirim..." : "Kirim Sekarang"}
                   </button>
@@ -381,16 +416,50 @@ export default function ReportHarian() {
             <div className="bg-white rounded-xl border p-5">
               <h2 className="font-semibold text-sm text-gray-700 mb-4">Pengaturan Laporan Otomatis</h2>
               <div className="space-y-4">
+
+                {/* Multi-email input */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email Penerima Laporan</label>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="contoh@email.com"
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-                  />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Email Penerima Laporan
+                    <span className="text-gray-400 font-normal ml-1">(bisa lebih dari 1)</span>
+                  </label>
+                  {emailList.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {emailList.map((e) => (
+                        <span key={e} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
+                          {e}
+                          <button
+                            onClick={() => removeEmail(e)}
+                            className="text-gray-400 hover:text-red-500 transition leading-none"
+                            title="Hapus"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={emailDraft}
+                      onChange={(e) => { setEmailDraft(e.target.value); setEmailError(""); }}
+                      onKeyDown={handleEmailKeyDown}
+                      placeholder="contoh@email.com lalu Enter"
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    />
+                    <button
+                      onClick={addEmail}
+                      disabled={!emailDraft.trim()}
+                      className="px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition disabled:opacity-40 shrink-0"
+                    >
+                      + Tambah
+                    </button>
+                  </div>
+                  {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
                 </div>
+
+                {/* Auto-send toggle */}
                 <label className="flex items-center gap-3 cursor-pointer select-none">
                   <div
                     onClick={() => setEnabledInput((v) => !v)}
@@ -402,6 +471,22 @@ export default function ReportHarian() {
                     {enabledInput ? "Kirim otomatis tiap pukul 23:00 WIB" : "Pengiriman otomatis nonaktif"}
                   </span>
                 </label>
+
+                {/* Only-if-orders toggle */}
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div
+                    onClick={() => setOnlyIfOrders((v) => !v)}
+                    className={`relative w-10 h-6 rounded-full transition-colors ${onlyIfOrders ? "bg-gray-900" : "bg-gray-300"}`}
+                  >
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${onlyIfOrders ? "translate-x-4" : "translate-x-0"}`} />
+                  </div>
+                  <span className="text-sm text-gray-700">
+                    {onlyIfOrders
+                      ? "Kirim hanya jika ada transaksi hari itu"
+                      : "Kirim setiap hari meski tidak ada transaksi"}
+                  </span>
+                </label>
+
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSaveConfig}
