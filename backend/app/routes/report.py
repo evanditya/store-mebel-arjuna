@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import daily_report as dr
+from datetime import date as date_type
 import os, json
 
 router = APIRouter(prefix="/api/report")
@@ -114,6 +115,35 @@ async def get_stats(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Akses ditolak"}, status_code=403)
     stats = dr.get_daily_stats(db)
     return stats
+
+
+# ── Chart ──────────────────────────────────────────────────────────
+@router.get("/chart")
+async def get_chart(
+    request: Request,
+    db: Session = Depends(get_db),
+    period: str = Query("day", regex="^(day|week|month)$"),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+):
+    if not dr.check_token(_token(request)):
+        return JSONResponse({"error": "Akses ditolak"}, status_code=403)
+
+    parsed_from = None
+    parsed_to = None
+    if date_from:
+        try:
+            parsed_from = date_type.fromisoformat(date_from)
+        except ValueError:
+            return JSONResponse({"error": "Format date_from tidak valid (YYYY-MM-DD)"}, status_code=400)
+    if date_to:
+        try:
+            parsed_to = date_type.fromisoformat(date_to)
+        except ValueError:
+            return JSONResponse({"error": "Format date_to tidak valid (YYYY-MM-DD)"}, status_code=400)
+
+    data = dr.get_chart_data(db, period=period, date_from=parsed_from, date_to=parsed_to)
+    return data
 
 
 # ── Send now ──────────────────────────────────────────────────────

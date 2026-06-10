@@ -128,6 +128,137 @@ def get_daily_stats(db, target_date: date | None = None) -> dict:
     }
 
 
+# ── Chart data ────────────────────────────────────────────────────
+def get_chart_data(
+    db,
+    period: str = "day",
+    date_from: "date | None" = None,
+    date_to: "date | None" = None,
+) -> dict:
+    from app.models import Order
+
+    now_wib = datetime.now(WIB)
+    today = now_wib.date()
+
+    # Determine date range and auto-detect granularity for custom ranges
+    if date_from and date_to:
+        if date_to > today:
+            date_to = today
+        if date_from > date_to:
+            date_from = date_to
+        days_span = (date_to - date_from).days + 1
+        if days_span <= 35:
+            granularity = "day"
+        elif days_span <= 100:
+            granularity = "week"
+        else:
+            granularity = "month"
+    else:
+        granularity = period
+        if period == "day":
+            date_from = today - timedelta(days=29)
+            date_to = today
+        elif period == "week":
+            # Align date_from to Monday of that week
+            raw_from = today - timedelta(weeks=11)
+            date_from = raw_from - timedelta(days=raw_from.weekday())
+            date_to = today
+        else:  # month
+            # 12 months back, starting from 1st of that month
+            month = today.month - 11
+            year = today.year
+            if month <= 0:
+                month += 12
+                year -= 1
+            date_from = date(year, month, 1)
+            date_to = today
+
+    # Fetch all orders in range (UTC-aware)
+    start_utc = datetime.combine(date_from, datetime.min.time()) - timedelta(hours=7)
+    end_utc = datetime.combine(date_to, datetime.min.time()) - timedelta(hours=7) + timedelta(days=1)
+    orders = db.query(Order).filter(Order.created_at >= start_utc, Order.created_at < end_utc).all()
+
+    paid_statuses = {"paid", "processing", "ready_pickup", "shipped", "completed"}
+
+    def _order_wib_date(o):
+        return (o.created_at + timedelta(hours=7)).date()
+
+    # ── Day buckets ──────────────────────────────────────────────
+    if granularity == "day":
+        MONTHS_ID = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
+        buckets: dict = {}
+        d = date_from
+        while d <= date_to:
+            buckets[d] = {"label": f"{d.day} {MONTHS_ID[d.month]}", "orders": 0, "revenue": 0.0}
+            d += timedelta(days=1)
+        for o in orders:
+            od = _order_wib_date(o)
+            if od in buckets:
+                buckets[od]["orders"] += 1
+                if o.status in paid_statuses:
+                    buckets[od]["revenue"] += o.total
+        data = list(buckets.values())
+
+    # ── Week buckets ─────────────────────────────────────────────
+    elif granularity == "week":
+        MONTHS_ID = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
+        # Build week starts (Monday)
+        week_starts = []
+        d = date_from - timedelta(days=date_from.weekday())  # nearest Monday ≤ date_from
+        while d <= date_to:
+            week_starts.append(d)
+            d += timedelta(days=7)
+        buckets = {ws: {"label": f"{ws.day} {MONTHS_ID[ws.month]}", "orders": 0, "revenue": 0.0} for ws in week_starts}
+        for o in orders:
+            od = _order_wib_date(o)
+            # Find its Monday
+            monday = od - timedelta(days=od.weekday())
+            if monday in buckets:
+                buckets[monday]["orders"] += 1
+                if o.status in paid_statuses:
+                    buckets[monday]["revenue"] += o.total
+        data = [buckets[ws] for ws in week_starts]
+
+    # ── Month buckets ────────────────────────────────────────────
+    else:
+        MONTHS_ID = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
+        month_starts = []
+        m = date(date_from.year, date_from.month, 1)
+        while m <= date_to:
+            month_starts.append(m)
+            # Advance one month
+            if m.month == 12:
+                m = date(m.year + 1, 1, 1)
+            else:
+                m = date(m.year, m.month + 1, 1)
+        buckets = {ms: {"label": f"{MONTHS_ID[ms.month]} {ms.year}", "orders": 0, "revenue": 0.0} for ms in month_starts}
+        for o in orders:
+            od = _order_wib_date(o)
+            ms = date(od.year, od.month, 1)
+            if ms in buckets:
+                buckets[ms]["orders"] += 1
+                if o.status in paid_statuses:
+                    buckets[ms]["revenue"] += o.total
+        data = [buckets[ms] for ms in month_starts]
+
+    # Status totals for donut chart
+    status_totals: dict = {}
+    for o in orders:
+        status_totals[o.status] = status_totals.get(o.status, 0) + 1
+
+    total_revenue = sum(o.total for o in orders if o.status in paid_statuses)
+
+    return {
+        "granularity": granularity,
+        "from": date_from.isoformat(),
+        "to": date_to.isoformat(),
+        "data": data,
+        "status_totals": status_totals,
+        "total_orders": len(orders),
+        "total_revenue": total_revenue,
+    }
+
+
 # ── Send report ───────────────────────────────────────────────────
 def send_daily_report(db, to_email: str, target_date: date | None = None) -> bool:
     from app.email import send_daily_report_email

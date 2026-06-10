@@ -1,5 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+
+const ReportChart = dynamic(() => import("@/components/ReportChart"), { ssr: false });
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Menunggu Bayar",
@@ -343,6 +346,9 @@ export default function ReportHarian() {
                 </div>
               )}
             </div>
+
+            {/* Charts */}
+            <ReportChart token={token} />
 
             {/* Orders list */}
             {stats.orders.length > 0 && (
