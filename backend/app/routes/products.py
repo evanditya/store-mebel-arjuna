@@ -226,7 +226,28 @@ async def list_products(
     if category:
         query = query.filter(Product.category == category)
     if search:
-        query = query.filter(Product.name.ilike(f"%{search}%"))
+        words = [w for w in search.strip().split() if w]
+        if len(words) > 1:
+            from sqlalchemy import or_, and_
+            conditions = []
+            for word in words:
+                pat = f"%{word}%"
+                conditions.append(
+                    or_(
+                        Product.name.ilike(pat),
+                        Product.category.ilike(pat),
+                        Product.description.ilike(pat),
+                    )
+                )
+            query = query.filter(and_(*conditions))
+        else:
+            pat = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    Product.name.ilike(pat),
+                    Product.category.ilike(pat),
+                )
+            )
     total = query.distinct().count()
     page = max(1, page)
     limit = max(1, min(limit, 100))
