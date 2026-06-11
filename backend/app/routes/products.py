@@ -226,9 +226,9 @@ async def list_products(
     if category:
         query = query.filter(Product.category == category)
     if search:
+        from sqlalchemy import or_, and_
         words = [w for w in search.strip().split() if w]
         if len(words) > 1:
-            from sqlalchemy import or_, and_
             conditions = []
             for word in words:
                 pat = f"%{word}%"
