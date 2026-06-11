@@ -151,26 +151,31 @@ def get_chart_data(
             granularity = "day"
         elif days_span <= 100:
             granularity = "week"
-        else:
+        elif days_span <= 730:
             granularity = "month"
+        else:
+            granularity = "year"
     else:
         granularity = period
         if period == "day":
             date_from = today - timedelta(days=29)
             date_to = today
         elif period == "week":
-            # Align date_from to Monday of that week
+            # 12 weeks back, align to Monday
             raw_from = today - timedelta(weeks=11)
             date_from = raw_from - timedelta(days=raw_from.weekday())
             date_to = today
-        else:  # month
+        elif period == "month":
             # 12 months back, starting from 1st of that month
-            month = today.month - 11
-            year = today.year
-            if month <= 0:
-                month += 12
-                year -= 1
-            date_from = date(year, month, 1)
+            m = today.month - 11
+            y = today.year
+            if m <= 0:
+                m += 12
+                y -= 1
+            date_from = date(y, m, 1)
+            date_to = today
+        else:  # year — last 5 full years + current year
+            date_from = date(today.year - 4, 1, 1)
             date_to = today
 
     # Fetch all orders in range (UTC-aware)
@@ -220,13 +225,12 @@ def get_chart_data(
         data = [buckets[ws] for ws in week_starts]
 
     # ── Month buckets ────────────────────────────────────────────
-    else:
+    elif granularity == "month":
         MONTHS_ID = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
         month_starts = []
         m = date(date_from.year, date_from.month, 1)
         while m <= date_to:
             month_starts.append(m)
-            # Advance one month
             if m.month == 12:
                 m = date(m.year + 1, 1, 1)
             else:
@@ -240,6 +244,18 @@ def get_chart_data(
                 if o.status in paid_statuses:
                     buckets[ms]["revenue"] += o.total
         data = [buckets[ms] for ms in month_starts]
+
+    # ── Year buckets ─────────────────────────────────────────────
+    else:
+        year_starts = list(range(date_from.year, date_to.year + 1))
+        buckets = {y: {"label": str(y), "orders": 0, "revenue": 0.0} for y in year_starts}
+        for o in orders:
+            y = _order_wib_date(o).year
+            if y in buckets:
+                buckets[y]["orders"] += 1
+                if o.status in paid_statuses:
+                    buckets[y]["revenue"] += o.total
+        data = [buckets[y] for y in year_starts]
 
     # Status totals for donut chart
     status_totals: dict = {}

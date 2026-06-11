@@ -122,7 +122,7 @@ async def get_stats(request: Request, db: Session = Depends(get_db)):
 async def get_chart(
     request: Request,
     db: Session = Depends(get_db),
-    period: str = Query("day", regex="^(day|week|month)$"),
+    period: str = Query("week", regex="^(day|week|month|year)$"),
     date_from: str = Query(None),
     date_to: str = Query(None),
 ):

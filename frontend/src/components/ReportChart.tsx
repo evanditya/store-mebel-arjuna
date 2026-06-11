@@ -25,7 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "#ef4444",
 };
 
-type Period = "day" | "week" | "month" | "custom";
+type Period = "week" | "month" | "year" | "custom";
 
 interface ChartPoint {
   label: string;
@@ -101,7 +101,7 @@ interface Props {
 }
 
 export default function ReportChart({ token }: Props) {
-  const [period, setPeriod] = useState<Period>("day");
+  const [period, setPeriod] = useState<Period>("week");
   const [customFrom, setCustomFrom] = useState(daysAgoStr(29));
   const [customTo, setCustomTo] = useState(todayStr());
   const [customDraft, setCustomDraft] = useState({ from: daysAgoStr(29), to: todayStr() });
@@ -152,9 +152,9 @@ export default function ReportChart({ token }: Props) {
   };
 
   const TABS: { key: Period; label: string }[] = [
-    { key: "day", label: "30 Hari" },
-    { key: "week", label: "12 Minggu" },
-    { key: "month", label: "12 Bulan" },
+    { key: "week", label: "Mingguan" },
+    { key: "month", label: "Bulanan" },
+    { key: "year", label: "Tahunan" },
     { key: "custom", label: "Kustom" },
   ];
 
@@ -166,11 +166,11 @@ export default function ReportChart({ token }: Props) {
 
   const chartLabel =
     data && period !== "custom"
-      ? period === "day"
-        ? "30 hari terakhir"
-        : period === "week"
+      ? period === "week"
         ? "12 minggu terakhir"
-        : "12 bulan terakhir"
+        : period === "month"
+        ? "12 bulan terakhir"
+        : "5 tahun terakhir"
       : data
       ? `${data.from} → ${data.to}`
       : "";
@@ -233,7 +233,7 @@ export default function ReportChart({ token }: Props) {
           {data && (
             <p className="text-xs text-gray-400 self-center">
               Granularitas: <span className="font-medium text-gray-600">
-                {data.granularity === "day" ? "per hari" : data.granularity === "week" ? "per minggu" : "per bulan"}
+                {data.granularity === "day" ? "per hari" : data.granularity === "week" ? "per minggu" : data.granularity === "month" ? "per bulan" : "per tahun"}
               </span>
             </p>
           )}
