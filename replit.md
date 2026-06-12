@@ -4,7 +4,7 @@
 - **Frontend**: Next.js 14 (port 5000), proxies `/api/*` and `/uploads/*` to backend
 - **Backend**: FastAPI + Python (port 8000)
 - **Database**: PostgreSQL (SQLAlchemy ORM, 600+ seeded products)
-- **Payments**: Midtrans
+- **Payments**: OttoPay
 - **Shipping**: Biteship courier integration
 
 ## Start
@@ -22,7 +22,7 @@ bash start.sh
 - Variant selection (single & multi-group): per-variant price, discount, stock
 - Cart management (add, update quantity, remove)
 - Checkout: shipping address, courier selection (Biteship rates), store pickup option
-- Payment via Midtrans (redirect to payment page)
+- Payment via OttoPay (redirect to OttoPay Secure Page)
 - Order history page with full order detail, status tracking, and pickup info
 - User registration, login, change password
 - Responsive design with customisable brand colours and Google Font
@@ -155,7 +155,7 @@ Currently migrates: `users.permissions TEXT` column.
 | `backend/app/routes/auth.py` | JWT auth, register/login, role/permission helpers, profile update |
 | `backend/app/routes/products.py` | Product CRUD, Excel export/import, category list |
 | `backend/app/routes/orders.py` | Order CRUD, status updates, email triggers |
-| `backend/app/routes/payment.py` | Midtrans payment integration |
+| `backend/app/routes/payment.py` | OttoPay payment integration |
 | `backend/app/routes/shipping.py` | Biteship rate lookup, order tracking |
 | `backend/app/routes/branding.py` | Store branding config read/write |
 | `backend/app/routes/report.py` | Daily report API (PIN verify, config, stats, send-now) |
@@ -205,9 +205,9 @@ Backward compatible: imports files with old "Harga" / "Harga Coret" column names
 | `EMAIL_USER` | ✅ | SMTP username / sender address |
 | `EMAIL_PASSWORD` | ✅ | SMTP password or Gmail App Password |
 | `EMAIL_FROM_NAME` | — | Display name for sent emails |
-| `MIDTRANS_SERVER_KEY` | ✅ | Midtrans server key |
-| `MIDTRANS_CLIENT_KEY` | ✅ | Midtrans client key |
-| `MIDTRANS_IS_PRODUCTION` | — | `true` for live payments (default: false) |
+| `OTTOPAY_MERCHANT_ID` | ✅ | OttoPay Merchant ID |
+| `OTTOPAY_API_KEY` | ✅ | OttoPay API Key |
+| `OTTOPAY_IS_PRODUCTION` | — | `true` for live payments (default: false) |
 | `BITESHIP_API_KEY` | — | Biteship API key for shipping rates |
 | `IMAP_USER` | — | Gmail address for Shopee sync |
 | `IMAP_PASSWORD` | — | Gmail App Password for Shopee sync |

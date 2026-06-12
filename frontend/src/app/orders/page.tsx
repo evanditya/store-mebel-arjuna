@@ -70,13 +70,6 @@ const trackingStatusLabels: Record<string, string> = {
   returned: "Dikembalikan",
 };
 
-declare global {
-  interface Window {
-    snap?: {
-      pay: (token: string, options: { onSuccess?: (result: unknown) => void; onPending?: (result: unknown) => void; onError?: (result: unknown) => void; onClose?: () => void }) => void;
-    };
-  }
-}
 
 const STATUS_TABS: { key: string; label: string; statuses: string[] }[] = [
   { key: "all", label: "Semua", statuses: [] },
@@ -94,9 +87,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
-  const [snapReady, setSnapReady] = useState(false);
-  const snapOpenRef = useRef(false);
-  const [midtransClientKey, setMidtransClientKey] = useState("");
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
@@ -132,19 +122,10 @@ export default function OrdersPage() {
         pickup_notes: data.pickup_notes || "",
       });
     }).catch(() => {});
-    fetch("/api/payment/client-key").then((r) => r.json()).then((data) => {
-      if (data.client_key) {
-        setMidtransClientKey(data.client_key);
-        const snapUrl = data.is_production ? "https://app.midtrans.com/snap/snap.js" : "https://app.sandbox.midtrans.com/snap/snap.js";
-        const existing = document.querySelector(`script[src="${snapUrl}"]`);
-        if (!existing) { const script = document.createElement("script"); script.src = snapUrl; script.setAttribute("data-client-key", data.client_key); script.onload = () => setSnapReady(true); document.head.appendChild(script); } else { setSnapReady(true); }
-      }
-    }).catch(() => {});
   }, [router]);
 
   const handlePay = async (orderId: string) => {
-    // Block if Snap popup is already open or another payment is being processed
-    if (!midtransClientKey || !snapReady || snapOpenRef.current || payingOrderId) return;
+    if (payingOrderId) return;
     setPayingOrderId(orderId);
     try {
       const tokenRes = await fetch("/api/payment/token", {
@@ -154,31 +135,12 @@ export default function OrdersPage() {
       });
       if (!tokenRes.ok) { setPayingOrderId(null); return; }
       const data = await tokenRes.json();
-      const token = data.token;
-      if (!token) { setPayingOrderId(null); return; }
-
-      const syncStatus = async () => { try { await fetch(`/api/payment/status/${orderId}`); } catch {} };
-
-      const onDone = async () => {
-        snapOpenRef.current = false;
-        await syncStatus();
-        await loadOrders();
-        setPayingOrderId(null);
-      };
-
-      if (window.snap && token) {
-        snapOpenRef.current = true;
-        window.snap.pay(token, {
-          onSuccess: onDone,
-          onPending: onDone,
-          onError: onDone,
-          onClose: onDone,
-        });
+      if (data.redirect_url) {
+        window.location.href = data.redirect_url;
       } else {
         setPayingOrderId(null);
       }
     } catch {
-      snapOpenRef.current = false;
       setPayingOrderId(null);
     }
   };
@@ -322,7 +284,7 @@ export default function OrdersPage() {
                     <span className="font-bold">{formatPrice(order.total)}</span>
                   </div>
 
-                  {isPending && midtransClientKey && (
+                  {isPending && (
                     <button onClick={() => handlePay(order.id)} disabled={isPaying} className="mt-3 w-full bg-yellow-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-yellow-600 transition disabled:opacity-50" data-testid={`button-pay-${order.id}`}>
                       {isPaying ? "Memproses..." : "Bayar Sekarang"}
                     </button>

@@ -29,24 +29,8 @@ interface CourierRate {
   etd_unit: string;
 }
 
-interface UserData {
-  name: string;
-  phone: string;
-  address: string;
-  area_id: string;
-  postal_code: string;
-}
-
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
-}
-
-declare global {
-  interface Window {
-    snap?: {
-      pay: (token: string, options: { onSuccess?: (result: unknown) => void; onPending?: (result: unknown) => void; onError?: (result: unknown) => void; onClose?: () => void }) => void;
-    };
-  }
 }
 
 export default function CheckoutPage() {
@@ -74,10 +58,6 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
-  const [snapReady, setSnapReady] = useState(false);
-  const [midtransClientKey, setMidtransClientKey] = useState("");
-  const [midtransIsProduction, setMidtransIsProduction] = useState(false);
-  const snapScriptRef = useRef<HTMLScriptElement | null>(null);
   const areaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const pendingAutoFetch = useRef<{ id: string; postal_code: number } | null>(null);
@@ -124,24 +104,6 @@ export default function CheckoutPage() {
       setPickupOpenTime(data.pickup_open_time || "08:00");
       setPickupCloseTime(data.pickup_close_time || "17:00");
       setPickupDays(data.pickup_days || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]);
-    }).catch(() => {});
-    fetch("/api/payment/client-key").then((r) => r.json()).then((data) => {
-      if (data.client_key) {
-        setMidtransClientKey(data.client_key);
-        setMidtransIsProduction(data.is_production);
-        const snapUrl = data.is_production ? "https://app.midtrans.com/snap/snap.js" : "https://app.sandbox.midtrans.com/snap/snap.js";
-        const existing = document.querySelector(`script[src="${snapUrl}"]`);
-        if (!existing) {
-          const script = document.createElement("script");
-          script.src = snapUrl;
-          script.setAttribute("data-client-key", data.client_key);
-          script.onload = () => setSnapReady(true);
-          document.head.appendChild(script);
-          snapScriptRef.current = script;
-        } else {
-          setSnapReady(true);
-        }
-      }
     }).catch(() => {});
   }, [router]);
 
@@ -258,25 +220,23 @@ export default function CheckoutPage() {
       if (!orderRes.ok) { const data = await orderRes.json(); setError(data.error || "Gagal membuat pesanan"); setProcessing(false); return; }
       const { order } = await orderRes.json();
 
-      if (midtransClientKey && snapReady) {
-        const tokenRes = await fetch("/api/payment/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: order.id }) });
-        if (!tokenRes.ok) {
-          const data = await tokenRes.json();
-          setError(data.hint ? `${data.error}. ${data.hint}` : data.error || "Gagal membuat token pembayaran");
-          setProcessing(false);
-          router.push("/orders");
-          return;
-        }
-        const { token } = await tokenRes.json();
-        const syncStatus = async (oid: string) => { try { await fetch(`/api/payment/status/${oid}`); } catch {} };
-        if (window.snap && token) {
-          window.snap.pay(token, {
-            onSuccess: async () => { await syncStatus(order.id); router.push("/orders"); },
-            onPending: async () => { await syncStatus(order.id); router.push("/orders"); },
-            onError: async () => { await syncStatus(order.id); setError("Pembayaran gagal"); setProcessing(false); },
-            onClose: async () => { await syncStatus(order.id); router.push("/orders"); },
-          });
-        } else { setError("Gagal memuat Snap payment"); setProcessing(false); }
+      const tokenRes = await fetch("/api/payment/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+
+      if (!tokenRes.ok) {
+        const data = await tokenRes.json();
+        setError(data.hint ? `${data.error}. ${data.hint}` : data.error || "Gagal membuat sesi pembayaran");
+        setProcessing(false);
+        router.push("/orders");
+        return;
+      }
+
+      const { redirect_url } = await tokenRes.json();
+      if (redirect_url) {
+        window.location.href = redirect_url;
       } else {
         router.push("/orders");
       }
@@ -488,25 +448,14 @@ export default function CheckoutPage() {
             <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span>{formatPrice(itemsTotal)}</span></div>
             {deliveryType === "pickup" && <div className="flex justify-between text-sm"><span className="text-gray-500">Pengiriman</span><span className="text-green-600 font-medium">Ambil di Toko (Gratis)</span></div>}
             {deliveryType === "delivery" && shippingAvailable && selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-500">Ongkir ({selectedRate.courier_name})</span><span>{formatPrice(shippingCost)}</span></div>}
-            {deliveryType === "delivery" && shippingAvailable && !selectedRate && <div className="flex justify-between text-sm"><span className="text-gray-400 italic">Ongkir</span><span className="text-gray-400 italic text-xs">Pilih kurir terlebih dahulu</span></div>}
-            <div className="flex justify-between items-center pt-2 border-t">
-              <span className="font-medium">Total</span>
-              <span className="text-xl font-bold text-red-600" data-testid="text-checkout-total">{formatPrice(grandTotal)}</span>
-            </div>
+            <div className="flex justify-between font-bold text-base pt-1 border-t mt-1"><span>Total</span><span>{formatPrice(grandTotal)}</span></div>
           </div>
         </div>
 
-        {midtransClientKey ? (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-            <p className="font-medium mb-1">{midtransIsProduction ? "Pembayaran Online" : "Mode Sandbox Midtrans"}</p>
-            <p>{midtransIsProduction ? "Klik tombol bayar untuk memulai pembayaran melalui Midtrans." : "Ini adalah mode testing. Gunakan kartu test untuk simulasi pembayaran."}</p>
-          </div>
-        ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
-            <p className="font-medium mb-1">Midtrans Belum Dikonfigurasi</p>
-            <p>Pesanan akan dibuat dengan status &quot;menunggu pembayaran&quot;.</p>
-          </div>
-        )}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+          <p className="font-medium mb-1">Pembayaran via OttoPay</p>
+          <p>Setelah klik Bayar, Anda akan diarahkan ke halaman pembayaran OttoPay untuk menyelesaikan transaksi.</p>
+        </div>
 
         <button onClick={handleCheckout} disabled={processing || items.length === 0} className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition disabled:opacity-50" data-testid="button-pay">
           {processing ? "Memproses..." : `Bayar ${formatPrice(grandTotal)}`}

@@ -3,17 +3,59 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Order, OrderItem, User
-from app.config import MIDTRANS_SERVER_KEY, MIDTRANS_CLIENT_KEY, MIDTRANS_IS_PRODUCTION
 from app.routes.auth import get_current_user
 import httpx
 import base64
+import hmac
 import hashlib
 import threading
 import json as _json
 import os as _os
+import re as _re
+import time as _time
 from datetime import datetime
 
 _SELLER_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
+
+OTTOPAY_MERCHANT_ID = _os.environ.get("OTTOPAY_MERCHANT_ID", "")
+OTTOPAY_API_KEY = _os.environ.get("OTTOPAY_API_KEY", "")
+OTTOPAY_IS_PRODUCTION = _os.environ.get("OTTOPAY_IS_PRODUCTION", "false").lower() == "true"
+
+_SANDBOX_BASE = "https://sandbox-secure-api.ottopay.id/securepage-be"
+_PRODUCTION_BASE = "https://secure.ottopay.id"
+
+
+def _base_url() -> str:
+    return _PRODUCTION_BASE if OTTOPAY_IS_PRODUCTION else _SANDBOX_BASE
+
+
+def _sort_keys(obj):
+    if isinstance(obj, list):
+        return [_sort_keys(i) for i in obj]
+    if isinstance(obj, dict):
+        return {k: _sort_keys(v) for k, v in sorted(obj.items())}
+    return obj
+
+
+def _generate_signature(body_json: str, timestamp: str, api_key: str) -> str:
+    sorted_obj = _sort_keys(_json.loads(body_json))
+    sorted_json = _json.dumps(sorted_obj, separators=(",", ":"))
+    stripped = _re.sub(r"[^a-zA-Z0-9{}:.,]", "", sorted_json)
+    lowercased = stripped.lower()
+    plain_text = f"{lowercased}&{timestamp}&{api_key}"
+    return hmac.new(api_key.encode(), plain_text.encode(), hashlib.sha512).hexdigest()
+
+
+def _ottopay_headers(body_json: str) -> dict:
+    timestamp = str(int(_time.time()))
+    auth = base64.b64encode(OTTOPAY_MERCHANT_ID.encode()).decode()
+    sig = _generate_signature(body_json, timestamp, OTTOPAY_API_KEY)
+    return {
+        "Content-Type": "application/json",
+        "Timestamp": timestamp,
+        "Authorization": f"Basic {auth}",
+        "Signature": sig,
+    }
 
 
 def _get_seller_name() -> str:
@@ -58,18 +100,16 @@ def _maybe_send_paid_email(order, db: Session):
     except Exception as e:
         print(f"[Email] paid email error: {e}")
 
+
+def _apply_ottopay_status(order, response_code: str, transaction_status_code: str = ""):
+    if response_code == "00" or transaction_status_code == "S":
+        order.status = "paid"
+    elif response_code in ("39", "41", "11") or transaction_status_code in ("FL", "CL", "EX"):
+        order.status = "cancelled"
+    order.updated_at = datetime.utcnow()
+
+
 router = APIRouter(prefix="/api/payment")
-
-SNAP_SANDBOX_URL = "https://app.sandbox.midtrans.com/snap/v1/transactions"
-SNAP_PRODUCTION_URL = "https://app.midtrans.com/snap/v1/transactions"
-
-
-@router.get("/client-key")
-async def get_client_key():
-    return {
-        "client_key": MIDTRANS_CLIENT_KEY or "",
-        "is_production": MIDTRANS_IS_PRODUCTION,
-    }
 
 
 @router.post("/token")
@@ -78,9 +118,9 @@ async def create_payment_token(request: Request, db: Session = Depends(get_db)):
     if not user:
         return JSONResponse({"error": "Login terlebih dahulu"}, status_code=401)
 
-    if not MIDTRANS_SERVER_KEY:
+    if not OTTOPAY_MERCHANT_ID or not OTTOPAY_API_KEY:
         return JSONResponse(
-            {"error": "Midtrans belum dikonfigurasi", "hint": "Tambahkan MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY di file .env.local"},
+            {"error": "OttoPay belum dikonfigurasi", "hint": "Tambahkan OTTOPAY_MERCHANT_ID dan OTTOPAY_API_KEY di Secrets"},
             status_code=400,
         )
 
@@ -90,139 +130,84 @@ async def create_payment_token(request: Request, db: Session = Depends(get_db)):
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
 
-    # Guard: do not create a new transaction if already paid or cancelled
     if order.status in ("paid", "cancelled", "completed"):
         return JSONResponse({"error": f"Pesanan sudah berstatus {order.status}"}, status_code=400)
 
-    # Reuse existing token — prevents creating duplicate Midtrans transactions
     if order.payment_token:
-        return {"token": order.payment_token}
-
-    snap_url = SNAP_PRODUCTION_URL if MIDTRANS_IS_PRODUCTION else SNAP_SANDBOX_URL
-    auth_string = base64.b64encode(f"{MIDTRANS_SERVER_KEY}:".encode()).decode()
+        return {"redirect_url": order.payment_token}
 
     order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-    item_details = []
-    for oi in order_items:
-        item_details.append({
-            "id": str(oi.product_id) if oi.product_id else oi.id,
-            "price": int(oi.price),
-            "quantity": oi.quantity,
-            "name": (oi.product_name or "Produk")[:50],
-        })
-
     items_total = sum(int(oi.price) * oi.quantity for oi in order_items)
-
     shipping_cost = int(order.shipping_cost or 0)
-    if shipping_cost > 0:
-        item_details.append({
-            "id": "shipping",
-            "price": shipping_cost,
-            "quantity": 1,
-            "name": (order.courier_service_name or "Ongkos Kirim")[:50],
-        })
-
     gross_total = items_total + shipping_cost
 
     name_parts = (user.name or "").split(" ", 1)
     first_name = name_parts[0] or user.email.split("@")[0]
     last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-    customer_details: dict = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": user.email,
-        "phone": user.phone or "",
+    phone = (user.phone or "").strip().lstrip("+")
+    if phone.startswith("0"):
+        phone = "62" + phone[1:]
+    if not phone:
+        phone = "628000000000"
+
+    otto_order_id = order.id.replace("-", "")[:32]
+
+    merchant_name = _get_seller_name()[:32]
+
+    payload = {
+        "customerDetails": {
+            "email": user.email,
+            "firstName": first_name,
+            "lastName": last_name,
+            "phone": phone,
+        },
+        "transactionDetails": {
+            "amount": gross_total,
+            "currency": "IDR",
+            "merchantName": merchant_name,
+            "orderId": otto_order_id,
+            "paymentMethod": 0,
+            "promoCode": "",
+            "vabca": "",
+            "vamandiri": "",
+            "vabni": "",
+            "vapermata": "",
+            "valain": "",
+            "vaOrderId": "",
+        },
+        "expiryDuration": "1h",
     }
 
-    shipping_text = order.shipping_address or ""
-    billing_address: dict = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": user.email,
-        "phone": user.phone or "",
-        "address": user.address or shipping_text,
-        "city": user.city or "",
-        "country_code": "IDN",
-    }
-    if user.postal_code:
-        billing_address["postal_code"] = user.postal_code
+    body_json = _json.dumps(payload)
+    headers = _ottopay_headers(body_json)
 
-    shipping_address = {
-        **billing_address,
-        "address": shipping_text or user.address or "",
-    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{_base_url()}/payment-services/v2.1.0/api/token",
+            content=body_json,
+            headers=headers,
+        )
 
-    customer_details["billing_address"] = billing_address
-    customer_details["shipping_address"] = shipping_address
+    try:
+        data = resp.json()
+    except Exception:
+        return JSONResponse({"error": "Respons tidak valid dari OttoPay"}, status_code=502)
 
-    import time
-    midtrans_order_id = order.id
+    if resp.status_code == 200 and data.get("responseData", {}).get("endpointUrl"):
+        endpoint_url = data["responseData"]["endpointUrl"]
+        order.payment_token = endpoint_url
+        order.midtrans_order_id = otto_order_id
+        db.commit()
+        return {"redirect_url": endpoint_url}
 
-    max_attempts = 3
-    last_error = ""
-    for attempt in range(max_attempts):
-        payload = {
-            "transaction_details": {
-                "order_id": midtrans_order_id,
-                "gross_amount": gross_total,
-            },
-            "customer_details": customer_details,
-            "item_details": item_details,
-            "credit_card": {
-                "secure": True,
-            },
-        }
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                snap_url,
-                json=payload,
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "Authorization": f"Basic {auth_string}",
-                },
-            )
-
-        if resp.status_code == 201:
-            data = resp.json()
-            order.payment_token = data.get("token")
-            order.midtrans_order_id = midtrans_order_id
-            db.commit()
-            return {"token": data.get("token"), "redirect_url": data.get("redirect_url")}
-
-        try:
-            error_data = resp.json()
-            msgs = error_data.get("error_messages", [])
-            last_error = "; ".join(msgs) if msgs else "Gagal membuat token pembayaran"
-            if any("already" in m.lower() or "used" in m.lower() or "exist" in m.lower() for m in msgs):
-                midtrans_order_id = f"{order.id}-{int(time.time())}"
-                continue
-        except Exception:
-            last_error = "Gagal membuat token pembayaran"
-        break
-
-    return JSONResponse({"error": last_error}, status_code=500)
-
-
-STATUS_SANDBOX_URL = "https://api.sandbox.midtrans.com/v2"
-STATUS_PRODUCTION_URL = "https://api.midtrans.com/v2"
-
-
-def _apply_transaction_status(order, transaction_status: str, fraud_status: str = "accept", transaction_id: str = None):
-    if transaction_id:
-        order.payment_id = transaction_id
-    if transaction_status == "capture":
-        if fraud_status == "accept":
-            order.status = "paid"
-    elif transaction_status == "settlement":
-        order.status = "paid"
-    elif transaction_status in ("cancel", "deny", "expire"):
-        order.status = "cancelled"
-    elif transaction_status == "pending":
-        order.status = "pending"
-    order.updated_at = datetime.utcnow()
+    error_msg = (
+        data.get("responseDesc")
+        or data.get("responseData", {}).get("statusMessage")
+        or "Gagal membuat sesi pembayaran"
+    )
+    print(f"[OttoPay] create token error {resp.status_code}: {data}")
+    return JSONResponse({"error": error_msg}, status_code=400)
 
 
 @router.get("/status/{order_id}")
@@ -235,36 +220,35 @@ async def check_payment_status(order_id: str, request: Request, db: Session = De
     if not order:
         return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
 
-    if not MIDTRANS_SERVER_KEY:
+    if not OTTOPAY_MERCHANT_ID or not OTTOPAY_API_KEY:
         return {"order_id": order.id, "status": order.status}
 
-    base_url = STATUS_PRODUCTION_URL if MIDTRANS_IS_PRODUCTION else STATUS_SANDBOX_URL
-    auth_string = base64.b64encode(f"{MIDTRANS_SERVER_KEY}:".encode()).decode()
+    trx_ref = order.midtrans_order_id or order.id.replace("-", "")[:32]
+    payload = {"trxRef": trx_ref}
+    body_json = _json.dumps(payload)
+    headers = _ottopay_headers(body_json)
 
-    midtrans_id = order.midtrans_order_id or order.id
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{base_url}/{midtrans_id}/status",
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Basic {auth_string}",
-            },
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{_base_url()}/sp/service/v3.0.0/api/checkstatus",
+            content=body_json,
+            headers=headers,
         )
 
     if resp.status_code == 200:
-        data = resp.json()
+        try:
+            data = resp.json()
+        except Exception:
+            return {"order_id": order.id, "status": order.status}
+
+        rc = data.get("responseCode", "")
+        tsc = data.get("transactionStatusCode", "")
         prev_status = order.status
-        _apply_transaction_status(
-            order,
-            data.get("transaction_status", ""),
-            data.get("fraud_status", "accept"),
-            data.get("transaction_id"),
-        )
+        _apply_ottopay_status(order, rc, tsc)
         db.commit()
         if prev_status != "paid" and order.status == "paid":
             _maybe_send_paid_email(order, db)
-        return {"order_id": order.id, "status": order.status, "transaction_status": data.get("transaction_status")}
+        return {"order_id": order.id, "status": order.status, "response_code": rc}
 
     return {"order_id": order.id, "status": order.status}
 
@@ -272,29 +256,33 @@ async def check_payment_status(order_id: str, request: Request, db: Session = De
 @router.post("/notification")
 async def payment_notification(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
-    order_id = body.get("order_id", "")
-    transaction_status = body.get("transaction_status", "")
-    fraud_status = body.get("fraud_status", "accept")
-    transaction_id = body.get("transaction_id")
 
-    if MIDTRANS_SERVER_KEY:
-        status_code = body.get("status_code")
-        gross_amount = body.get("gross_amount")
-        signature_key = body.get("signature_key")
-        raw_string = f"{order_id}{status_code}{gross_amount}{MIDTRANS_SERVER_KEY}"
-        expected_signature = hashlib.sha512(raw_string.encode()).hexdigest()
-        if signature_key != expected_signature:
-            return JSONResponse({"error": "Invalid signature"}, status_code=403)
+    if OTTOPAY_MERCHANT_ID and OTTOPAY_API_KEY:
+        auth_header = request.headers.get("Authorization", "")
+        expected_auth = "Basic " + base64.b64encode(OTTOPAY_MERCHANT_ID.encode()).decode()
+        if auth_header != expected_auth:
+            return JSONResponse({"responseCode": "25", "responseDesc": "Unauthorized"}, status_code=401)
 
-    order = db.query(Order).filter(Order.id == order_id).first()
+        timestamp = request.headers.get("Timestamp", "")
+        sig_header = request.headers.get("Signature", "")
+        body_json = _json.dumps(body)
+        expected_sig = _generate_signature(body_json, timestamp, OTTOPAY_API_KEY)
+        if sig_header != expected_sig:
+            return JSONResponse({"responseCode": "27", "responseDesc": "Invalid Signature"}, status_code=401)
+
+    trx_ref = body.get("trxRef", "")
+    response_code = body.get("responseCode", "")
+
+    order = db.query(Order).filter(Order.midtrans_order_id == trx_ref).first()
     if not order:
-        order = db.query(Order).filter(Order.midtrans_order_id == order_id).first()
+        order = db.query(Order).filter(Order.id == trx_ref).first()
     if not order:
-        return JSONResponse({"error": "Pesanan tidak ditemukan"}, status_code=404)
+        return JSONResponse({"responseCode": "00", "responseDesc": "Success"})
 
     prev_status = order.status
-    _apply_transaction_status(order, transaction_status, fraud_status, transaction_id)
+    _apply_ottopay_status(order, response_code)
     db.commit()
     if prev_status != "paid" and order.status == "paid":
         _maybe_send_paid_email(order, db)
-    return {"success": True}
+
+    return {"responseCode": "00", "responseDesc": "Success"}
