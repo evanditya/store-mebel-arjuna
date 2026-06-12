@@ -1,6 +1,6 @@
 # Mebel Arjuna Store
 
-Full-stack e-commerce marketplace for Indonesian furniture, built with **Next.js 14 + Python FastAPI + PostgreSQL**. Includes a complete buyer experience, seller CMS dashboard, multi-admin role management, Midtrans payment gateway, and Biteship multi-courier shipping.
+Full-stack e-commerce marketplace for Indonesian furniture, built with **Next.js 14 + Python FastAPI + PostgreSQL**. Includes a complete buyer experience, seller CMS dashboard, multi-admin role management, OttoPay payment gateway, and Biteship multi-courier shipping.
 
 ---
 
@@ -12,9 +12,9 @@ Full-stack e-commerce marketplace for Indonesian furniture, built with **Next.js
 
    | Secret | Purpose |
    |---|---|
-   | `MIDTRANS_SERVER_KEY` | Midtrans payment server key |
-   | `MIDTRANS_CLIENT_KEY` | Midtrans Snap client key |
-   | `MIDTRANS_IS_PRODUCTION` | `true` for live, `false` for sandbox |
+   | `OTTOPAY_MERCHANT_ID` | OttoPay Merchant ID |
+   | `OTTOPAY_API_KEY` | OttoPay API Key |
+   | `OTTOPAY_IS_PRODUCTION` | `true` untuk live, `false` untuk sandbox |
    | `BITESHIP_API_KEY` | Biteship courier API key |
    | `JWT_SECRET` | Random string for JWT signing |
 
@@ -33,7 +33,7 @@ Full-stack e-commerce marketplace for Indonesian furniture, built with **Next.js
                 ┌──────┘         └───────┐
                 ▼                        ▼
           ┌──────────┐             ┌──────────┐
-          │ Midtrans │             │ Biteship │
+          │  OttoPay │             │ Biteship │
           │ Payment  │             │ Shipping │
           └──────────┘             └──────────┘
 ```
@@ -60,7 +60,7 @@ The Next.js frontend proxies `/api/*` and `/uploads/*` to the FastAPI backend.
   - **Kirim ke Alamat** — Biteship multi-courier with real-time rate comparison
   - **Ambil di Toko** — In-store pickup with configurable opening hours
 - Sub-district level address autocomplete via Biteship area search
-- Midtrans Snap popup for payment (Credit Card, GoPay, Bank Transfer, QRIS, etc.)
+- OttoPay Secure Page for payment (redirect-based)
 
 **Account & Orders**
 - Buyer registration and login (JWT-based)
@@ -161,7 +161,7 @@ Change the password from the seller dashboard after first login.
 │   │       ├── admins.py     # Sub-admin CRUD (super admin only)
 │   │       ├── products.py   # Product CRUD + Excel import/export
 │   │       ├── cart.py, orders.py
-│   │       ├── payment.py    # Midtrans Snap
+│   │       ├── payment.py    # OttoPay payment
 │   │       ├── shipping.py   # Biteship rates, area search, waybills, tracking
 │   │       ├── banners.py    # Banner CMS
 │   │       ├── branding.py   # Store branding (colors, fonts, favicon, hours)
@@ -180,9 +180,9 @@ Change the password from the seller dashboard after first login.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | auto on Replit | PostgreSQL connection string |
-| `MIDTRANS_SERVER_KEY` | Payments | — | Midtrans server key |
-| `MIDTRANS_CLIENT_KEY` | Payments | — | Midtrans Snap client key |
-| `MIDTRANS_IS_PRODUCTION` | No | `false` | Use production Midtrans |
+| `OTTOPAY_MERCHANT_ID` | Payments | — | OttoPay Merchant ID |
+| `OTTOPAY_API_KEY` | Payments | — | OttoPay API Key |
+| `OTTOPAY_IS_PRODUCTION` | No | `false` | `true` untuk live payment |
 | `BITESHIP_API_KEY` | Shipping | — | Biteship API key |
 | `JWT_SECRET` | **Yes** | — | JWT signing secret (use a long random string) |
 | `IMAP_USER` | Shopee sync | — | Gmail address that receives Shopee Seller emails |
@@ -207,7 +207,8 @@ Visit `/docs` on port 8000 for Swagger UI. Key endpoints:
 - `GET  /products` / `GET /products/{slug}` — Catalog
 - `POST /cart/add` — Cart
 - `POST /shipping/rates` / `POST /shipping/area` — Biteship
-- `POST /payment/create` — Midtrans Snap token
+- `POST /payment/token` — OttoPay payment URL
+- `POST /payment/notification` — OttoPay webhook callback
 - `GET  /orders` — Order history
 - `GET  /admins` / `POST /admins` — Sub-admin management *(super admin only)*
 
@@ -216,7 +217,7 @@ Visit `/docs` on port 8000 for Swagger UI. Key endpoints:
 ## Troubleshooting
 
 - **Database not connecting** — confirm PostgreSQL is added in Tools (Replit) or `DATABASE_URL` is correct.
-- **Payment not working** — verify Midtrans server/client keys and the `IS_PRODUCTION` flag match the keys' environment.
+- **Payment not working** — verify `OTTOPAY_MERCHANT_ID` dan `OTTOPAY_API_KEY`, pastikan `OTTOPAY_IS_PRODUCTION` sesuai environment. Daftarkan webhook URL `https://<domain>/api/payment/notification` di dashboard OttoPay.
 - **Shipping rates blank** — verify `BITESHIP_API_KEY` and that the warehouse origin is set in seller settings.
 - **"Permission denied" on a seller tab** — sub-admin lacks that permission; have the super admin grant it from the Kelola Admin tab.
 
