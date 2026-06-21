@@ -40,7 +40,7 @@ def _sort_keys(obj):
 def _generate_signature(body_json: str, timestamp: str, api_key: str) -> str:
     sorted_obj = _sort_keys(_json.loads(body_json))
     sorted_json = _json.dumps(sorted_obj, separators=(",", ":"))
-    stripped = _re.sub(r"[^a-zA-Z0-9{}:.,]", "", sorted_json)
+    stripped = re.sub(r'[^a-zA-Z0-9{}:.,\[\]"@\-]', "", sorted_json)
     lowercased = stripped.lower()
     plain_text = f"{lowercased}&{timestamp}&{api_key}"
     return hmac.new(api_key.encode(), plain_text.encode(), hashlib.sha512).hexdigest()
@@ -280,7 +280,8 @@ async def payment_notification(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"responseCode": "00", "responseDesc": "Success"})
 
     prev_status = order.status
-    _apply_ottopay_status(order, response_code)
+    trx_status = body.get("transactionStatusCode", "")
+    _apply_ottopay_status(order, response_code, trx_status)
     db.commit()
     if prev_status != "paid" and order.status == "paid":
         _maybe_send_paid_email(order, db)
