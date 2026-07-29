@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Product, ProductImage, ProductVariant, gen_id
 from app.routes.auth import get_current_user, has_perm, is_staff
+from app.paths import get_seller_config_path, get_upload_dir
 import json
 import os
 import re
@@ -71,12 +72,10 @@ def _str_to_variants(raw: str):
     return variants
 
 
-SELLER_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "seller_config.json")
-
-
 def load_seller_config():
-    if os.path.exists(SELLER_CONFIG_PATH):
-        with open(SELLER_CONFIG_PATH, "r") as f:
+    path = get_seller_config_path()
+    if os.path.exists(path):
+        with open(path, "r") as f:
             data = json.load(f)
             seller_name = data.get("seller_name", "")
             site_name = data.get("site_name") or seller_name or "Toko Online"
@@ -941,7 +940,7 @@ async def sync_products_zip(request: Request, file: UploadFile = File(...), db: 
         return JSONResponse({"error": "products.json tidak bisa dibaca"}, status_code=400)
 
     products_list = raw.get("products", [])
-    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    uploads_dir = get_upload_dir()
     os.makedirs(uploads_dir, exist_ok=True)
     zip_names = set(zfile.namelist())
     total = len(products_list)

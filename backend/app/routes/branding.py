@@ -3,22 +3,17 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.routes.auth import get_current_user, has_perm
+from app.paths import get_seller_config_path, get_upload_dir
 import json, os, shutil, uuid, time
 
 router = APIRouter(prefix="/api/branding")
 
-SELLER_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "seller_config.json"
-)
-UPLOADS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"
-)
-
 
 def _load_config() -> dict:
     try:
-        if os.path.exists(SELLER_CONFIG_PATH):
-            with open(SELLER_CONFIG_PATH) as f:
+        path = get_seller_config_path()
+        if os.path.exists(path):
+            with open(path) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -26,8 +21,9 @@ def _load_config() -> dict:
 
 
 def _save_config(data: dict):
-    os.makedirs(os.path.dirname(SELLER_CONFIG_PATH), exist_ok=True)
-    with open(SELLER_CONFIG_PATH, "w") as f:
+    path = get_seller_config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -119,8 +115,8 @@ async def upload_image(
     if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
         ext = "jpg"
     filename = f"branding_{image_type}_{uuid.uuid4().hex[:8]}.{ext}"
-    dest = os.path.join(UPLOADS_DIR, filename)
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    dest = os.path.join(get_upload_dir(), filename)
+    os.makedirs(get_upload_dir(), exist_ok=True)
     try:
         with open(dest, "wb") as f:
             shutil.copyfileobj(file.file, f)

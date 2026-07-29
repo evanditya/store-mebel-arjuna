@@ -1,0 +1,10 @@
+# Prefer GitHub deploys for this repo (product images ~440MB).
+# Kept for accidental `railway up` attempts.
+frontend/public/images/
+attached_assets/
+marketplace-template-v2.zip
+node_modules/
+frontend/node_modules/
+frontend/.next/
+backend/venv/
+.git/

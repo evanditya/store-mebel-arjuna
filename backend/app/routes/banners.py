@@ -4,13 +4,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Banner
 from app.routes.auth import get_current_user, has_perm
+from app.paths import get_upload_dir
 import os, shutil, uuid
 
 router = APIRouter(prefix="/api/banners")
-
-UPLOADS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"
-)
 
 
 def banner_to_dict(b: Banner) -> dict:
@@ -48,8 +45,8 @@ async def upload_banner_image(request: Request, file: UploadFile = File(...), db
     if ext not in ("jpg", "jpeg", "png", "webp"):
         ext = "jpg"
     filename = f"banner_{uuid.uuid4().hex[:10]}.{ext}"
-    dest = os.path.join(UPLOADS_DIR, filename)
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    dest = os.path.join(get_upload_dir(), filename)
+    os.makedirs(get_upload_dir(), exist_ok=True)
     try:
         with open(dest, "wb") as f:
             shutil.copyfileobj(file.file, f)

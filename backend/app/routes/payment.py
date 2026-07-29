@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Order, OrderItem, User
 from app.routes.auth import get_current_user
+from app.paths import get_seller_config_path
 import httpx
 import base64
 import hmac
@@ -14,8 +15,6 @@ import os as _os
 import re as _re
 import time as _time
 from datetime import datetime
-
-_SELLER_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
 
 OTTOPAY_MERCHANT_ID = _os.environ.get("OTTOPAY_MERCHANT_ID", "")
 OTTOPAY_API_KEY = _os.environ.get("OTTOPAY_API_KEY", "")
@@ -60,7 +59,7 @@ def _ottopay_headers(body_json: str) -> dict:
 
 def _get_seller_name() -> str:
     try:
-        with open(_SELLER_CONFIG_PATH) as f:
+        with open(get_seller_config_path()) as f:
             d = _json.load(f)
             return d.get("site_name") or d.get("seller_name") or "Toko Online"
     except Exception:
@@ -69,7 +68,7 @@ def _get_seller_name() -> str:
 
 def _get_pickup_info() -> dict:
     try:
-        with open(_SELLER_CONFIG_PATH) as f:
+        with open(get_seller_config_path()) as f:
             d = _json.load(f)
             return {
                 "store_address": d.get("store_address", ""),

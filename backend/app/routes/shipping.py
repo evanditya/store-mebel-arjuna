@@ -71,8 +71,8 @@ KNOWN_COURIERS = [
 
 
 def _seller_config_path() -> str:
-    import os
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "seller_config.json")
+    from app.paths import get_seller_config_path
+    return get_seller_config_path()
 
 
 def _get_seller_name() -> str:
@@ -474,7 +474,7 @@ async def create_shipment(order_id: str, request: Request, db: Session = Depends
         if buyer:
             try:
                 from app.email import snapshot_order, snapshot_user
-                config_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
+                config_path = _seller_config_path()
                 try:
                     with open(config_path) as _f:
                         _cfg = json.load(_f)
@@ -608,13 +608,10 @@ async def shipping_label(order_id: str, request: Request, db: Session = Depends(
     buyer = db.query(User).filter(User.id == order.user_id).first()
 
     seller_logo = ""
-    seller_config_path = "seller_config.json"
     try:
-        import os
-        if os.path.exists(seller_config_path):
-            with open(seller_config_path) as f:
-                sc = json.load(f)
-                seller_logo = sc.get("profile_picture", "")
+        with open(_seller_config_path()) as f:
+            sc = json.load(f)
+            seller_logo = sc.get("profile_picture", "")
     except Exception:
         pass
 

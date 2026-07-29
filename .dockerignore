@@ -1,0 +1,22 @@
+# Ignore local/dev artifacts; keep Dockerfile context small
+.git
+.gitignore
+.env
+.env.*
+node_modules
+frontend/node_modules
+frontend/tsconfig.tsbuildinfo
+frontend/pnpm-lock.yaml
+
+backend/__pycache__
+**/__pycache__
+*.pyc
+uploads
+backend/uploads
+.replit
+replit.nix
+marketplace-template-v2.zip
+attached_assets
+data
+laporan-pengerjaan.html
+frontend/public/laporan-pengerjaan.html

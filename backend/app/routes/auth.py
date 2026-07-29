@@ -178,7 +178,8 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
         user.area_name = area_name
     if user.role == "seller":
         import os, json
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json")
+        from app.paths import get_seller_config_path
+        config_path = get_seller_config_path()
         config = {}
         try:
             if os.path.exists(config_path):

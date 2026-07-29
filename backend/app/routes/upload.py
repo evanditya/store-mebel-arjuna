@@ -4,13 +4,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Product, ProductImage, gen_id
 from app.routes.auth import get_current_user, is_staff
+from app.paths import get_upload_dir
 import os
 import uuid
 
 router = APIRouter(prefix="/api")
-
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.post("/upload-image")
@@ -21,7 +19,7 @@ async def upload_image(request: Request, file: UploadFile = File(...), db: Sessi
 
     ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
     filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    filepath = os.path.join(get_upload_dir(), filename)
 
     contents = await file.read()
     with open(filepath, "wb") as f:
@@ -43,7 +41,7 @@ async def add_product_image(slug: str, request: Request, file: UploadFile = File
 
     ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
     filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    filepath = os.path.join(get_upload_dir(), filename)
 
     contents = await file.read()
     with open(filepath, "wb") as f:

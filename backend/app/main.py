@@ -63,6 +63,12 @@ allowed_origins = [
     "http://127.0.0.1:5000",
     "http://0.0.0.0:5000",
 ]
+frontend_url = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
+if frontend_url:
+    allowed_origins.append(frontend_url)
+railway_public = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+if railway_public:
+    allowed_origins.append(f"https://{railway_public}")
 replit_dev_domain = os.environ.get("REPLIT_DEV_DOMAIN")
 if replit_dev_domain:
     allowed_origins.append(f"https://{replit_dev_domain}")
@@ -95,8 +101,9 @@ app.include_router(shopee_sync_routes.router)
 app.include_router(excel_import_routes.router)
 app.include_router(report_routes.router)
 
-uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(uploads_dir, exist_ok=True)
+from app.paths import get_upload_dir
+
+uploads_dir = get_upload_dir()
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 @app.get("/api/health")

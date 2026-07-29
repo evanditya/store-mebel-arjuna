@@ -45,10 +45,11 @@ def seed():
 
         seller_config = data.get("seller", {})
         if seller_config:
-            config_path = os.path.join(os.path.dirname(__file__), "seller_config.json")
+            from app.paths import get_seller_config_path
+            config_path = get_seller_config_path()
             with open(config_path, "w") as f:
                 json.dump(seller_config, f, indent=2)
-            print(f"Seller config written to seller_config.json")
+            print(f"Seller config written to {config_path}")
 
         products_data = data.get("products", [])
         for p in products_data:

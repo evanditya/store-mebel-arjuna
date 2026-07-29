@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Order, OrderItem, CartItem, Product, User, gen_id
 from app.routes.auth import get_current_user, has_perm, is_staff
+from app.paths import get_seller_config_path
 from datetime import datetime
 import threading
 import json as _json
@@ -11,12 +12,10 @@ import os as _os
 
 router = APIRouter(prefix="/api")
 
-_SELLER_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "seller_config.json")
-
 
 def _get_seller_name() -> str:
     try:
-        with open(_SELLER_CONFIG_PATH) as f:
+        with open(get_seller_config_path()) as f:
             d = _json.load(f)
             return d.get("site_name") or d.get("seller_name") or "Toko Online"
     except Exception:
@@ -25,7 +24,7 @@ def _get_seller_name() -> str:
 
 def _get_pickup_info() -> dict:
     try:
-        with open(_SELLER_CONFIG_PATH) as f:
+        with open(get_seller_config_path()) as f:
             d = _json.load(f)
             return {
                 "store_address": d.get("store_address", ""),

@@ -1,9 +1,6 @@
 import os, json, threading, hashlib, secrets, time
 from datetime import datetime, date, timedelta, timezone
-
-SELLER_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seller_config.json"
-)
+from app.paths import get_seller_config_path
 
 WIB = timezone(timedelta(hours=7))
 
@@ -29,8 +26,9 @@ def _get_emails(config: dict) -> list:
 
 def _load_config() -> dict:
     try:
-        if os.path.exists(SELLER_CONFIG_PATH):
-            with open(SELLER_CONFIG_PATH) as f:
+        path = get_seller_config_path()
+        if os.path.exists(path):
+            with open(path) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -38,8 +36,9 @@ def _load_config() -> dict:
 
 
 def _save_config(data: dict):
-    os.makedirs(os.path.dirname(SELLER_CONFIG_PATH), exist_ok=True)
-    with open(SELLER_CONFIG_PATH, "w") as f:
+    path = get_seller_config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
 
