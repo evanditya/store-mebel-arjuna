@@ -18,11 +18,13 @@ Browser → Railway HTTPS → Next.js ($PORT)
 
 1. Create a **new** Railway project (do not reuse marketplace-forge).
 2. Add **PostgreSQL** from the Railway plugin catalog.
-3. Create a service from this repo (root `Dockerfile` / `railway.toml`).
+3. Create an empty service (e.g. `web`) and connect GitHub repo `evanditya/store-mebel-arjuna` on branch `production-deployment`. Prefer GitHub deploys — `railway up` hits upload size limits (~440MB product images under `frontend/public/images/`).
 4. Attach a **Volume** to the service, mount path: `/data`.
 5. Generate a public Railway domain for the service (`*.up.railway.app`).
 6. Set environment variables (below).
 7. Deploy and run the smoke checklist.
+
+**Live URL (this migration):** https://web-production-e7fae.up.railway.app
 
 ## Required environment variables
 
