@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, has_perm
 import openpyxl
 
 router = APIRouter(prefix="/api/excel-import", tags=["excel-import"])
@@ -165,7 +165,7 @@ async def preview_import(
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     content = await file.read()
@@ -313,7 +313,7 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
     import json as _json
 
     user = get_current_user(request, db)
-    if not user or user.role != "seller":
+    if not has_perm(user, "products"):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     body = await request.json()
@@ -356,46 +356,66 @@ async def apply_import(request: Request, db: Session = Depends(get_db)):
             })
 
     from sqlalchemy import text
+    from sqlalchemy.orm import joinedload
+    from app.models import Product
+    from app.routes.products import sync_product_stock
 
-    # ── ONE SQL statement for all products ──────────────────────────────────
-    if prod_rows:
-        db.execute(text("""
-            UPDATE products AS p SET
-                price           = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float    ELSE p.price           END,
-                stock           = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int      ELSE p.stock           END,
-                original_price  = CASE WHEN j->>'diskon' = '__skip__' THEN p.original_price
-                                       WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
-                                       ELSE p.original_price END,
-                is_available    = CASE WHEN (j->>'tersedia') IS NOT NULL
-                                       THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
-                                       ELSE p.is_available   END,
-                weight          = CASE WHEN (j->>'berat')    IS NOT NULL THEN (j->>'berat')::int      ELSE p.weight          END,
-                length          = CASE WHEN (j->>'panjang')  IS NOT NULL THEN (j->>'panjang')::int    ELSE p.length          END,
-                width           = CASE WHEN (j->>'lebar')    IS NOT NULL THEN (j->>'lebar')::int      ELSE p.width           END,
-                height          = CASE WHEN (j->>'tinggi')   IS NOT NULL THEN (j->>'tinggi')::int     ELSE p.height          END,
-                category        = COALESCE(j->>'kategori',  p.category),
-                description     = COALESCE(j->>'deskripsi', p.description),
-                video_url       = COALESCE(j->>'video',     p.video_url)
-            FROM json_array_elements(CAST(:data AS json)) AS j
-            WHERE p.id = j->>'id'
-        """), {"data": _json.dumps(prod_rows)})
+    try:
+        # ── ONE SQL statement for all products ──────────────────────────────────
+        if prod_rows:
+            db.execute(text("""
+                UPDATE products AS p SET
+                    price           = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float    ELSE p.price           END,
+                    stock           = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int      ELSE p.stock           END,
+                    original_price  = CASE WHEN j->>'diskon' = '__skip__' THEN p.original_price
+                                           WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
+                                           ELSE p.original_price END,
+                    is_available    = CASE WHEN (j->>'tersedia') IS NOT NULL
+                                           THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
+                                           ELSE p.is_available   END,
+                    weight          = CASE WHEN (j->>'berat')    IS NOT NULL THEN (j->>'berat')::int      ELSE p.weight          END,
+                    length          = CASE WHEN (j->>'panjang')  IS NOT NULL THEN (j->>'panjang')::int    ELSE p.length          END,
+                    width           = CASE WHEN (j->>'lebar')    IS NOT NULL THEN (j->>'lebar')::int      ELSE p.width           END,
+                    height          = CASE WHEN (j->>'tinggi')   IS NOT NULL THEN (j->>'tinggi')::int     ELSE p.height          END,
+                    category        = COALESCE(j->>'kategori',  p.category),
+                    description     = COALESCE(j->>'deskripsi', p.description),
+                    video_url       = COALESCE(j->>'video',     p.video_url)
+                FROM json_array_elements(CAST(:data AS json)) AS j
+                WHERE p.id = j->>'id'
+            """), {"data": _json.dumps(prod_rows)})
 
-    # ── ONE SQL statement for all variants ──────────────────────────────────
-    if var_rows:
-        db.execute(text("""
-            UPDATE product_variants AS v SET
-                price          = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float  ELSE v.price          END,
-                stock          = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int    ELSE v.stock          END,
-                original_price = CASE WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
-                                      ELSE v.original_price END,
-                is_available   = CASE WHEN (j->>'tersedia') IS NOT NULL
-                                      THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
-                                      ELSE v.is_available   END
-            FROM json_array_elements(CAST(:data AS json)) AS j
-            WHERE v.id = j->>'id'
-        """), {"data": _json.dumps(var_rows)})
+        # ── ONE SQL statement for all variants ──────────────────────────────────
+        if var_rows:
+            db.execute(text("""
+                UPDATE product_variants AS v SET
+                    price          = CASE WHEN (j->>'price')    IS NOT NULL THEN (j->>'price')::float  ELSE v.price          END,
+                    stock          = CASE WHEN (j->>'stock')    IS NOT NULL THEN (j->>'stock')::int    ELSE v.stock          END,
+                    original_price = CASE WHEN (j->>'diskon') IS NOT NULL THEN NULLIF((j->>'diskon'),'0')::float
+                                          ELSE v.original_price END,
+                    is_available   = CASE WHEN (j->>'tersedia') IS NOT NULL
+                                          THEN (j->>'tersedia') NOT IN ('tidak','no','false','0')
+                                          ELSE v.is_available   END
+                FROM json_array_elements(CAST(:data AS json)) AS j
+                WHERE v.id = j->>'id'
+            """), {"data": _json.dumps(var_rows)})
 
-    db.commit()
+        # Recompute product.stock from variants (apply leaves product stock NULL when variants exist)
+        if prod_rows:
+            product_ids = [r["id"] for r in prod_rows]
+            products = (
+                db.query(Product)
+                .options(joinedload(Product.variants))
+                .filter(Product.id.in_(product_ids))
+                .all()
+            )
+            for prod in products:
+                sync_product_stock(prod)
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({"error": f"Gagal menerapkan update: {str(e)}"}, status_code=500)
+
     return {
         "success": True,
         "updated_products": len(prod_rows),
