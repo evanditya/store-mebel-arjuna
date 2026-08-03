@@ -51,6 +51,10 @@ except Exception as e:
   else
     echo "Database already has $PRODUCT_COUNT products — skipping seed."
   fi
+
+  # Drop gallery/description images that belong to another scrape product index
+  echo "Sanitizing cross-product images..."
+  (cd backend && python3 fix_product_images.py) || echo "Image sanitize skipped."
 ) &
 
 echo "Backend PID: $BACKEND_PID"
