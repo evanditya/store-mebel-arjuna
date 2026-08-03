@@ -104,6 +104,20 @@ def product_to_dict(product: Product) -> dict:
             specs = json.loads(product.specifications)
         except Exception:
             specs = []
+
+    gallery_sorted = sorted(product.images, key=lambda i: i.display_order)
+    gallery_urls = [img.image_url for img in gallery_sorted]
+    primary = resolve_primary_image(product)
+    canonical = canonical_local_image_index(primary or product.primary_image, gallery_urls)
+    safe_gallery = [
+        img for img in gallery_sorted
+        if url_belongs_to_local_index(img.image_url, canonical)
+    ]
+    safe_desc = [
+        u for u in desc_images
+        if url_belongs_to_local_index(u, canonical)
+    ]
+
     return {
         "id": product.id,
         "name": product.name,
@@ -112,7 +126,7 @@ def product_to_dict(product: Product) -> dict:
         "original_price": product.original_price,
         "category": product.category,
         "description": product.description,
-        "description_images": desc_images,
+        "description_images": safe_desc,
         "specifications": specs,
         "sold_count": product.sold_count,
         "stock": effective_stock(product),
@@ -121,9 +135,9 @@ def product_to_dict(product: Product) -> dict:
         "length": product.length or 10,
         "width": product.width or 10,
         "height": product.height or 10,
-        "primary_image": resolve_primary_image(product),
+        "primary_image": primary,
         "video_url": product.video_url,
-        "images": [{"id": img.id, "image_url": img.image_url, "display_order": img.display_order} for img in product.images],
+        "images": [{"id": img.id, "image_url": img.image_url, "display_order": img.display_order} for img in safe_gallery],
         "variants": [
             {
                 "id": v.id,
@@ -180,6 +194,51 @@ def resolve_primary_image(product: Product) -> str:
         if gallery:
             return gallery[0].image_url
     return pi
+
+
+_LOCAL_PRODUCT_IMG_RE = re.compile(r"/images/product_(\d+)_")
+
+
+def local_product_image_index(url: str | None) -> int | None:
+    """Extract scrape-index from paths like /images/product_203_0.jpg or ..._desc_0.jpg."""
+    if not url:
+        return None
+    m = _LOCAL_PRODUCT_IMG_RE.search(url)
+    return int(m.group(1)) if m else None
+
+
+def canonical_local_image_index(primary_image: str | None, image_urls: list[str]) -> int | None:
+    """Prefer primary_image index; otherwise majority of gallery indexes.
+
+    Seed/scrape data often mixes other products' files into gallery/description_images
+    (especially product_1_*). Primary is usually the correct product index.
+    """
+    primary_idx = local_product_image_index(primary_image)
+    if primary_idx is not None:
+        return primary_idx
+    counts: dict[int, int] = {}
+    for u in image_urls:
+        idx = local_product_image_index(u)
+        if idx is not None:
+            counts[idx] = counts.get(idx, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def url_belongs_to_local_index(url: str | None, canonical: int | None) -> bool:
+    """Keep non-indexed URLs (CDN/uploads); drop local files from another product index."""
+    if canonical is None or not url:
+        return True
+    idx = local_product_image_index(url)
+    if idx is None:
+        return True
+    return idx == canonical
+
+
+def sanitize_image_urls(primary_image: str | None, image_urls: list[str]) -> list[str]:
+    canonical = canonical_local_image_index(primary_image, image_urls)
+    return [u for u in image_urls if url_belongs_to_local_index(u, canonical)]
 
 
 def product_to_list_dict(product: Product) -> dict:

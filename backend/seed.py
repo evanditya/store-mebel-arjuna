@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from app.database import engine, SessionLocal, Base
 from app.models import User, Product, ProductImage, ProductVariant, gen_id
+from app.routes.products import sanitize_image_urls, canonical_local_image_index, url_belongs_to_local_index
 
 
 def seed():
@@ -57,8 +58,16 @@ def seed():
             if existing:
                 print(f"Product already exists: {p['slug']}")
                 continue
-            desc_images = p.get("description_images", [])
-            desc_images_str = json.dumps(desc_images) if desc_images else None
+
+            raw_images = []
+            for img_url in p.get("images", []):
+                raw_images.append(img_url if isinstance(img_url, str) else img_url.get("image_url", ""))
+            primary = p.get("primary_image")
+            safe_images = sanitize_image_urls(primary, raw_images)
+            canonical = canonical_local_image_index(primary, safe_images)
+            raw_desc = p.get("description_images", []) or []
+            safe_desc = [u for u in raw_desc if url_belongs_to_local_index(u, canonical)]
+            desc_images_str = json.dumps(safe_desc) if safe_desc else None
             specs = p.get("specifications", [])
             specs_str = json.dumps(specs) if specs else None
 
@@ -79,17 +88,19 @@ def seed():
                 length=p.get("length", 10),
                 width=p.get("width", 10),
                 height=p.get("height", 10),
-                primary_image=p.get("primary_image"),
+                primary_image=primary,
                 video_url=p.get("video_url"),
             )
             db.add(product)
             db.flush()
 
-            for idx, img_url in enumerate(p.get("images", [])):
+            for idx, img_url in enumerate(safe_images):
+                if not img_url:
+                    continue
                 db.add(ProductImage(
                     id=gen_id(),
                     product_id=product.id,
-                    image_url=img_url if isinstance(img_url, str) else img_url.get("image_url", ""),
+                    image_url=img_url,
                     display_order=idx,
                 ))
 

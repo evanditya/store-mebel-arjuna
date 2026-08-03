@@ -60,6 +60,10 @@ except Exception as e:
   else
     echo "Database already has $PRODUCT_COUNT products — skipping seed."
   fi
+
+  # Drop gallery/description images that belong to another scrape product index
+  echo "Sanitizing cross-product images..."
+  cd "$ROOT_DIR/backend" && python fix_product_images.py || echo "Image sanitize skipped."
 ) &
 
 echo "Starting Next.js on 0.0.0.0:${PORT}..."
